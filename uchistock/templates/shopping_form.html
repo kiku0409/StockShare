@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}買い物アイテムを追加 - うちストック{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <a href="{{ url_for('shopping') }}" class="back-link">← 戻る</a>
+  <h1 class="page-title">買い物アイテムを追加</h1>
+</div>
+
+<form method="post" action="{{ url_for('shopping_add') }}" class="form-card">
+  <div class="form-group">
+    <label class="form-label" for="name">商品名 <span class="required">*</span></label>
+    <input class="form-input" type="text" id="name" name="name"
+           value="{{ prefill.get('name', '') }}" placeholder="例: 牛乳" required>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group form-group-sm">
+      <label class="form-label" for="quantity">個数 <span class="required">*</span></label>
+      <input class="form-input" type="number" id="quantity" name="quantity"
+             value="{{ prefill.get('quantity', '1') }}" min="0.1" step="0.1" required>
+    </div>
+    <div class="form-group form-group-sm">
+      <label class="form-label" for="unit">単位</label>
+      <input class="form-input" type="text" id="unit" name="unit"
+             value="{{ prefill.get('unit', '') }}" placeholder="例: 本、袋、個">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">追加した人 <span class="required">*</span></label>
+    <div class="radio-group">
+      {% for member in members %}
+        <label class="radio-label">
+          <input type="radio" name="added_by" value="{{ member }}"
+            {% if prefill.get('added_by') == member %}checked{% endif %}
+            {% if loop.first and not prefill.get('added_by') %}checked{% endif %}
+          >
+          <span class="radio-text">{{ member }}</span>
+        </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label" for="memo">メモ</label>
+    <textarea class="form-input form-textarea" id="memo" name="memo"
+              placeholder="例: 特売があれば2つ、〇〇ブランドで">{{ prefill.get('memo', '') }}</textarea>
+  </div>
+
+  <div class="form-actions">
+    <a href="{{ url_for('shopping') }}" class="btn btn-ghost">キャンセル</a>
+    <button type="submit" class="btn btn-primary">リストに追加する</button>
+  </div>
+</form>
+{% endblock %}

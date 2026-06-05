@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}買い物リスト - うちストック{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">🛒 買い物リスト</h1>
+  <a href="{{ url_for('shopping_add') }}" class="btn btn-primary btn-icon">＋ 追加</a>
+</div>
+
+<!-- 未購入 -->
+<section class="shopping-section">
+  <h2 class="section-title">未購入
+    {% if pending %}<span class="item-count">{{ pending|length }}点</span>{% endif %}
+  </h2>
+
+  {% if pending %}
+    <div class="item-list">
+      {% for item in pending %}
+        <div class="shopping-card pending">
+          <div class="card-body">
+            <div class="item-info">
+              <span class="item-name">{{ item.name }}</span>
+              <span class="item-qty">{{ item.quantity|int if item.quantity == item.quantity|int else item.quantity }}{{ item.unit }}</span>
+            </div>
+            <div class="item-meta">
+              <span class="badge badge-member">{{ item.added_by }}</span>
+              {% if item.memo %}<span class="item-memo-inline">📝 {{ item.memo }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="card-actions">
+            <!-- 購入済みにする -->
+            <details class="purchase-dropdown">
+              <summary class="btn btn-success btn-sm">購入済みにする ▾</summary>
+              <div class="purchase-panel">
+                <p class="purchase-label">誰が買いましたか？</p>
+                {% for member in members %}
+                  <form method="post" action="{{ url_for('shopping_purchase', item_id=item.id) }}" style="display:inline">
+                    <input type="hidden" name="purchased_by" value="{{ member }}">
+                    <button type="submit" class="btn btn-outline btn-sm">{{ member }}</button>
+                  </form>
+                {% endfor %}
+              </div>
+            </details>
+            <form method="post" action="{{ url_for('shopping_delete', item_id=item.id) }}"
+                  onsubmit="return confirm('「{{ item.name }}」を削除しますか？')">
+              <button type="submit" class="btn btn-danger btn-sm">削除</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state-sm">
+      <p>未購入のアイテムはありません 🎉</p>
+    </div>
+  {% endif %}
+</section>
+
+<!-- 購入済み -->
+{% if purchased %}
+<section class="shopping-section">
+  <h2 class="section-title purchased-title">購入済み
+    <span class="item-count">{{ purchased|length }}点</span>
+  </h2>
+  <div class="item-list">
+    {% for item in purchased %}
+      <div class="shopping-card purchased">
+        <div class="card-body">
+          <div class="item-info">
+            <span class="item-name done">{{ item.name }}</span>
+            <span class="item-qty">{{ item.quantity|int if item.quantity == item.quantity|int else item.quantity }}{{ item.unit }}</span>
+          </div>
+          <div class="item-meta">
+            <span class="badge badge-purchased">{{ item.purchased_by }} が購入</span>
+            {% if item.purchased_at %}
+              <span class="item-date">{{ item.purchased_at[:10] }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="card-actions">
+          {% if not item.added_to_inventory %}
+            <a href="{{ url_for('shopping_add_to_inventory', item_id=item.id) }}"
+               class="btn btn-teal btn-sm">在庫に追加する</a>
+          {% else %}
+            <span class="badge badge-stocked">在庫追加済み</span>
+          {% endif %}
+          <form method="post" action="{{ url_for('shopping_delete', item_id=item.id) }}"
+                onsubmit="return confirm('「{{ item.name }}」を削除しますか？')">
+            <button type="submit" class="btn btn-danger btn-sm">削除</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
