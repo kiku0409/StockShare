@@ -28,19 +28,20 @@
         <div class="item-list">
           {% for item in grouped[loc] %}
             <div class="swipe-wrapper" id="wrapper-{{ item.id }}">
-              <!-- 背面の削除ボタン -->
+              <!-- 背面のアクションボタン（スワイプで出現） -->
               <div class="swipe-action">
+                <a href="{{ url_for('inventory_edit', item_id=item.id) }}"
+                   class="swipe-action-btn swipe-edit-btn">✏️<br>編集</a>
                 <form method="post" action="{{ url_for('inventory_delete', item_id=item.id) }}"
-                      onsubmit="return confirm('「{{ item.name }}」を削除しますか？')">
-                  <button type="submit" class="swipe-delete-btn">🗑<br>削除</button>
+                      data-name="{{ item.name }}">
+                  <button type="submit" class="swipe-action-btn swipe-delete-btn">🗑<br>削除</button>
                 </form>
               </div>
-              <!-- カード本体（左スワイプで削除ボタン出現） -->
+              <!-- カード本体 -->
               <div class="inventory-card swipeable">
                 <div class="card-body">
                   <div class="item-header">
                     <span class="item-name">{{ item.name }}</span>
-                    <!-- ±個数コントロール -->
                     <div class="qty-control">
                       <button class="qty-btn" type="button"
                               onclick="updateQty({{ item.id }}, -1, this)">−</button>
@@ -78,50 +79,76 @@
 
 {% block scripts %}
 <script>
-// ── スワイプで削除 ─────────────────────────────────────────
+// ── スワイプで削除・編集 (Pointer Events API — タッチ・マウス両対応) ──────────
 function initSwipe() {
+  const REVEAL = 160; // 編集+削除ボタン分
+
   document.querySelectorAll('.swipeable').forEach(card => {
-    let startX = 0, startY = 0, isOpen = false;
-    const REVEAL = 80;
+    let startX = 0, startY = 0, isOpen = false, swipeActive = false;
 
-    card.addEventListener('touchstart', e => {
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
+    card.addEventListener('pointerdown', e => {
+      startX = e.clientX;
+      startY = e.clientY;
+      swipeActive = false;
       card.style.transition = 'none';
-    }, { passive: true });
+    });
 
-    card.addEventListener('touchmove', e => {
-      const dx = e.touches[0].clientX - startX;
-      const dy = e.touches[0].clientY - startY;
-      if (!isOpen && Math.abs(dy) > Math.abs(dx)) return;
-      if (!isOpen && dx > 0) return;
-      e.preventDefault();
+    card.addEventListener('pointermove', e => {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if (!swipeActive) {
+        if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+        if (Math.abs(dy) > Math.abs(dx)) return; // 縦スクロール優先
+        if (dx > 0 && !isOpen) return;           // 閉じているときの右スワイプは無視
+        swipeActive = true;
+      }
+
       const base = isOpen ? -REVEAL : 0;
       const translate = Math.max(-REVEAL, Math.min(0, base + dx));
       card.style.transform = `translateX(${translate}px)`;
-    }, { passive: false });
+    });
 
-    card.addEventListener('touchend', e => {
-      const dx = e.changedTouches[0].clientX - startX;
+    card.addEventListener('pointerup', e => {
       card.style.transition = 'transform 0.25s ease';
-      if (isOpen) {
-        isOpen = dx <= 30;
-      } else {
-        isOpen = dx < -40;
+      if (!swipeActive) {
+        card.style.transform = isOpen ? `translateX(-${REVEAL}px)` : 'translateX(0)';
+        return;
       }
+      swipeActive = false;
+      const dx = e.clientX - startX;
+      if (isOpen) {
+        isOpen = dx < 30;
+      } else {
+        isOpen = dx < -REVEAL / 2;
+      }
+      card.style.transform = isOpen ? `translateX(-${REVEAL}px)` : 'translateX(0)';
+    });
+
+    card.addEventListener('pointercancel', () => {
+      swipeActive = false;
+      card.style.transition = 'transform 0.25s ease';
       card.style.transform = isOpen ? `translateX(-${REVEAL}px)` : 'translateX(0)';
     });
   });
 
-  // 他の場所をタップで閉じる
-  document.addEventListener('touchstart', e => {
+  // スワイプ外タップで閉じる
+  document.addEventListener('pointerdown', e => {
     if (!e.target.closest('.swipe-wrapper')) {
       document.querySelectorAll('.swipeable').forEach(c => {
         c.style.transition = 'transform 0.25s ease';
         c.style.transform = 'translateX(0)';
       });
     }
-  }, { passive: true });
+  });
+
+  // 削除確認ダイアログ（data-name 属性から取得し XSS を防止）
+  document.querySelectorAll('.swipe-action form').forEach(form => {
+    form.addEventListener('submit', e => {
+      const name = form.dataset.name || 'このアイテム';
+      if (!confirm(`「${name}」を削除しますか？`)) e.preventDefault();
+    });
+  });
 }
 
 // ── ±個数ボタン ────────────────────────────────────────────

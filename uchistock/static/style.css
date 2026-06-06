@@ -83,6 +83,7 @@ body {
 }
 .flash-success { background: var(--green-light); color: var(--green-dark); border-left: 4px solid var(--green); }
 .flash-error   { background: var(--red-light);   color: var(--red);        border-left: 4px solid var(--red); }
+.flash-warning { background: #fff8e1;            color: #8a5200;           border-left: 4px solid #f0a500; }
 
 /* ── Page Header ──────────────────────────────── */
 .page-header {
@@ -162,15 +163,15 @@ body {
   right: 0;
   top: 0;
   bottom: 0;
-  width: 80px;
-  background: var(--red);
+  width: 160px; /* 編集 + 削除 */
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
   border-radius: var(--radius);
+  overflow: hidden;
 }
 
-.swipe-delete-btn {
+.swipe-action-btn {
+  flex: 1;
   background: none;
   border: none;
   color: var(--white);
@@ -178,8 +179,23 @@ body {
   font-weight: 700;
   cursor: pointer;
   text-align: center;
-  line-height: 1.4;
+  line-height: 1.5;
   padding: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.swipe-edit-btn   { background: var(--teal); }
+.swipe-delete-btn { background: var(--red); }
+
+.swipe-action form {
+  flex: 1;
+  display: flex;
+}
+.swipe-action form .swipe-action-btn {
+  width: 100%;
 }
 
 .inventory-card {
@@ -191,7 +207,10 @@ body {
   transform: translateX(0);
   transition: transform 0.25s ease;
   will-change: transform;
+  touch-action: pan-y; /* 縦スクロールはブラウザに委ねる */
+  cursor: grab;
 }
+.inventory-card:active { cursor: grabbing; }
 
 /* ── Inventory card header (name + ±buttons) ─── */
 .item-header {
@@ -354,8 +373,17 @@ body {
   color: var(--text-muted);
   margin-bottom: 8px;
 }
-.purchase-panel form { display: block; margin-bottom: 4px; }
+.purchase-panel form { display: block; margin-bottom: 4px; } /* inline style 不要 */
 .purchase-panel .btn-outline { width: 100%; }
+
+/* ── 購入済みセクションヘッダー（タイトル＋一括クリア） ─── */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.section-header-row .section-title { margin-bottom: 0; }
 
 /* ── Section titles ───────────────────────────── */
 .shopping-section { margin-bottom: 24px; }
@@ -395,9 +423,6 @@ body {
   background: var(--white);
   border-radius: var(--radius);
 }
-
-/* ── Delete form inline ───────────────────────── */
-.delete-form { flex-shrink: 0; }
 
 /* ── FAB area ─────────────────────────────────── */
 .fab-area {

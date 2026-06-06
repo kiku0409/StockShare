@@ -1,10 +1,12 @@
 import sqlite3
 import os
+import logging
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, abort, jsonify
 
 app = Flask(__name__)
-app.secret_key = 'uchistock-secret-key'
+# secret_key は環境変数から取得。未設定時は開発用の値を使う
+app.secret_key = os.environ.get('SECRET_KEY', 'uchistock-dev-key-change-in-prod')
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'uchistock.db')
 
@@ -20,34 +22,36 @@ def get_db():
 
 def init_db():
     conn = get_db()
-    conn.executescript('''
-        CREATE TABLE IF NOT EXISTS inventory_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            quantity REAL NOT NULL,
-            unit TEXT NOT NULL DEFAULT '',
-            location TEXT NOT NULL,
-            expiry_date TEXT,
-            memo TEXT,
-            created_at TEXT NOT NULL
-        );
+    try:
+        conn.executescript('''
+            CREATE TABLE IF NOT EXISTS inventory_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                quantity REAL NOT NULL,
+                unit TEXT NOT NULL DEFAULT '',
+                location TEXT NOT NULL,
+                expiry_date TEXT,
+                memo TEXT,
+                created_at TEXT NOT NULL
+            );
 
-        CREATE TABLE IF NOT EXISTS shopping_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            quantity REAL NOT NULL,
-            unit TEXT NOT NULL DEFAULT '',
-            memo TEXT,
-            added_by TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-            purchased_by TEXT,
-            created_at TEXT NOT NULL,
-            purchased_at TEXT,
-            added_to_inventory INTEGER NOT NULL DEFAULT 0
-        );
-    ''')
-    conn.commit()
-    conn.close()
+            CREATE TABLE IF NOT EXISTS shopping_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                quantity REAL NOT NULL,
+                unit TEXT NOT NULL DEFAULT '',
+                memo TEXT,
+                added_by TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                purchased_by TEXT,
+                created_at TEXT NOT NULL,
+                purchased_at TEXT,
+                added_to_inventory INTEGER NOT NULL DEFAULT 0
+            );
+        ''')
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def now():
@@ -58,15 +62,40 @@ def _fmt_qty(qty):
     return int(qty) if qty == int(qty) else qty
 
 
+def _validate_item(form):
+    """商品名・個数の共通バリデーション。エラーリストと変換後の個数を返す。"""
+    errors = []
+    name = form.get('name', '').strip()
+    quantity = form.get('quantity', '').strip()
+
+    if not name:
+        errors.append('商品名を入力してください。')
+
+    qty_val = None
+    if not quantity:
+        errors.append('個数を入力してください。')
+    else:
+        try:
+            qty_val = float(quantity)
+            if qty_val <= 0:
+                errors.append('個数は0より大きい値を入力してください。')
+        except ValueError:
+            errors.append('個数は数値で入力してください。')
+
+    return errors, name, qty_val
+
+
 # ── Inventory ──────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
     conn = get_db()
-    rows = conn.execute(
-        'SELECT * FROM inventory_items ORDER BY location, created_at DESC'
-    ).fetchall()
-    conn.close()
+    try:
+        rows = conn.execute(
+            'SELECT * FROM inventory_items ORDER BY location, created_at DESC'
+        ).fetchall()
+    finally:
+        conn.close()
 
     grouped = {loc: [] for loc in LOCATIONS}
     for row in rows:
@@ -87,67 +116,120 @@ def inventory_add():
     }
 
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        quantity = request.form.get('quantity', '').strip()
+        errors, name, qty_val = _validate_item(request.form)
         unit = request.form.get('unit', '').strip()
         location = request.form.get('location', '').strip()
         expiry_date = request.form.get('expiry_date', '').strip()
         memo = request.form.get('memo', '').strip()
         from_shopping_id = request.form.get('from_shopping', '').strip()
 
-        errors = []
-        if not name:
-            errors.append('商品名を入力してください。')
-        if not quantity:
-            errors.append('個数を入力してください。')
-        else:
-            try:
-                qty = float(quantity)
-                if qty <= 0:
-                    errors.append('個数は0より大きい値を入力してください。')
-            except ValueError:
-                errors.append('個数は数値で入力してください。')
         if location not in LOCATIONS:
             errors.append('保管場所を選択してください。')
 
         if errors:
             for e in errors:
                 flash(e, 'error')
-            return render_template('inventory_form.html', locations=LOCATIONS, prefill=request.form)
+            return render_template('inventory_form.html', locations=LOCATIONS,
+                                   prefill=request.form, edit_mode=False)
 
         conn = get_db()
-        conn.execute(
-            'INSERT INTO inventory_items (name, quantity, unit, location, expiry_date, memo, created_at) '
-            'VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (name, float(quantity), unit, location,
-             expiry_date or None, memo or None, now())
-        )
-        if from_shopping_id:
-            try:
-                conn.execute(
-                    'UPDATE shopping_items SET added_to_inventory = 1 WHERE id = ?',
-                    (int(from_shopping_id),)
-                )
-            except (ValueError, Exception):
-                pass
-        conn.commit()
-        conn.close()
+        try:
+            # 同じ場所に同名商品がある場合は警告（保存は続行）
+            dup = conn.execute(
+                'SELECT id FROM inventory_items WHERE name = ? AND location = ?',
+                (name, location)
+            ).fetchone()
+            if dup:
+                flash(f'「{name}」はすでに{location}に登録されています。個数を確認してください。', 'warning')
+
+            conn.execute(
+                'INSERT INTO inventory_items (name, quantity, unit, location, expiry_date, memo, created_at) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (name, qty_val, unit, location, expiry_date or None, memo or None, now())
+            )
+            if from_shopping_id:
+                try:
+                    conn.execute(
+                        'UPDATE shopping_items SET added_to_inventory = 1 WHERE id = ?',
+                        (int(from_shopping_id),)
+                    )
+                except ValueError:
+                    app.logger.warning('from_shopping_id の更新失敗 (値: %s)', from_shopping_id)
+            conn.commit()
+        finally:
+            conn.close()
+
         flash(f'「{name}」を在庫に追加しました。', 'success')
         return redirect(url_for('shopping') if from_shopping_id else url_for('index'))
 
-    return render_template('inventory_form.html', locations=LOCATIONS, prefill=prefill)
+    return render_template('inventory_form.html', locations=LOCATIONS,
+                           prefill=prefill, edit_mode=False)
+
+
+@app.route('/inventory/edit/<int:item_id>', methods=['GET', 'POST'])
+def inventory_edit(item_id):
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT * FROM inventory_items WHERE id = ?', (item_id,)).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        abort(404)
+
+    if request.method == 'POST':
+        errors, name, qty_val = _validate_item(request.form)
+        unit = request.form.get('unit', '').strip()
+        location = request.form.get('location', '').strip()
+        expiry_date = request.form.get('expiry_date', '').strip()
+        memo = request.form.get('memo', '').strip()
+
+        if location not in LOCATIONS:
+            errors.append('保管場所を選択してください。')
+
+        if errors:
+            for e in errors:
+                flash(e, 'error')
+            return render_template('inventory_form.html', locations=LOCATIONS,
+                                   prefill=request.form, edit_mode=True, item_id=item_id)
+
+        conn = get_db()
+        try:
+            conn.execute(
+                'UPDATE inventory_items SET name=?, quantity=?, unit=?, location=?, '
+                'expiry_date=?, memo=? WHERE id=?',
+                (name, qty_val, unit, location, expiry_date or None, memo or None, item_id)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        flash(f'「{name}」を更新しました。', 'success')
+        return redirect(url_for('index'))
+
+    prefill = {
+        'name': row['name'],
+        'quantity': _fmt_qty(row['quantity']),
+        'unit': row['unit'],
+        'location': row['location'],
+        'expiry_date': row['expiry_date'] or '',
+        'memo': row['memo'] or '',
+    }
+    return render_template('inventory_form.html', locations=LOCATIONS,
+                           prefill=prefill, edit_mode=True, item_id=item_id)
 
 
 @app.route('/inventory/delete/<int:item_id>', methods=['POST'])
 def inventory_delete(item_id):
     conn = get_db()
-    row = conn.execute('SELECT name FROM inventory_items WHERE id = ?', (item_id,)).fetchone()
-    if not row:
+    try:
+        row = conn.execute('SELECT name FROM inventory_items WHERE id = ?', (item_id,)).fetchone()
+        if not row:
+            abort(404)
+        conn.execute('DELETE FROM inventory_items WHERE id = ?', (item_id,))
+        conn.commit()
+    finally:
         conn.close()
-        abort(404)
-    conn.execute('DELETE FROM inventory_items WHERE id = ?', (item_id,))
-    conn.commit()
-    conn.close()
     flash(f'「{row["name"]}」を削除しました。', 'success')
     return redirect(url_for('index'))
 
@@ -160,22 +242,24 @@ def inventory_update_qty(item_id):
         return jsonify({'error': 'invalid'}), 400
 
     conn = get_db()
-    row = conn.execute('SELECT * FROM inventory_items WHERE id = ?', (item_id,)).fetchone()
-    if not row:
-        conn.close()
-        return jsonify({'error': 'not found'}), 404
+    try:
+        row = conn.execute('SELECT * FROM inventory_items WHERE id = ?', (item_id,)).fetchone()
+        if not row:
+            return jsonify({'error': 'not found'}), 404
 
-    new_qty = row['quantity'] + delta
-    if new_qty <= 0:
-        conn.execute('DELETE FROM inventory_items WHERE id = ?', (item_id,))
-        conn.commit()
+        new_qty = row['quantity'] + delta
+        if new_qty <= 0:
+            conn.execute('DELETE FROM inventory_items WHERE id = ?', (item_id,))
+            conn.commit()
+            result = jsonify({'deleted': True})
+        else:
+            conn.execute('UPDATE inventory_items SET quantity = ? WHERE id = ?', (new_qty, item_id))
+            conn.commit()
+            result = jsonify({'quantity': int(new_qty) if new_qty == int(new_qty) else new_qty})
+    finally:
         conn.close()
-        return jsonify({'deleted': True})
 
-    conn.execute('UPDATE inventory_items SET quantity = ? WHERE id = ?', (new_qty, item_id))
-    conn.commit()
-    conn.close()
-    return jsonify({'quantity': int(new_qty) if new_qty == int(new_qty) else new_qty})
+    return result
 
 
 # ── Shopping ───────────────────────────────────────────────────────────────
@@ -183,39 +267,28 @@ def inventory_update_qty(item_id):
 @app.route('/shopping')
 def shopping():
     conn = get_db()
-    pending = conn.execute(
-        'SELECT * FROM shopping_items WHERE status = ? ORDER BY created_at DESC',
-        ('pending',)
-    ).fetchall()
-    purchased = conn.execute(
-        'SELECT * FROM shopping_items WHERE status = ? ORDER BY purchased_at DESC',
-        ('purchased',)
-    ).fetchall()
-    conn.close()
+    try:
+        pending = conn.execute(
+            'SELECT * FROM shopping_items WHERE status = ? ORDER BY created_at DESC',
+            ('pending',)
+        ).fetchall()
+        purchased = conn.execute(
+            'SELECT * FROM shopping_items WHERE status = ? ORDER BY purchased_at DESC',
+            ('purchased',)
+        ).fetchall()
+    finally:
+        conn.close()
     return render_template('shopping.html', pending=pending, purchased=purchased, members=MEMBERS)
 
 
 @app.route('/shopping/add', methods=['GET', 'POST'])
 def shopping_add():
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        quantity = request.form.get('quantity', '').strip()
+        errors, name, qty_val = _validate_item(request.form)
         unit = request.form.get('unit', '').strip()
         memo = request.form.get('memo', '').strip()
         added_by = request.form.get('added_by', '').strip()
 
-        errors = []
-        if not name:
-            errors.append('商品名を入力してください。')
-        if not quantity:
-            errors.append('個数を入力してください。')
-        else:
-            try:
-                qty = float(quantity)
-                if qty <= 0:
-                    errors.append('個数は0より大きい値を入力してください。')
-            except ValueError:
-                errors.append('個数は数値で入力してください。')
         if added_by not in MEMBERS:
             errors.append('追加した人を選択してください。')
 
@@ -225,13 +298,16 @@ def shopping_add():
             return render_template('shopping_form.html', members=MEMBERS, prefill=request.form)
 
         conn = get_db()
-        conn.execute(
-            'INSERT INTO shopping_items (name, quantity, unit, memo, added_by, status, created_at) '
-            'VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (name, float(quantity), unit, memo or None, added_by, 'pending', now())
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                'INSERT INTO shopping_items (name, quantity, unit, memo, added_by, status, created_at) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (name, qty_val, unit, memo or None, added_by, 'pending', now())
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
         flash(f'「{name}」を買い物リストに追加しました。', 'success')
         return redirect(url_for('shopping'))
 
@@ -246,50 +322,64 @@ def shopping_purchase(item_id):
         return redirect(url_for('shopping'))
 
     conn = get_db()
-    row = conn.execute('SELECT * FROM shopping_items WHERE id = ?', (item_id,)).fetchone()
-    if not row:
+    try:
+        row = conn.execute('SELECT * FROM shopping_items WHERE id = ?', (item_id,)).fetchone()
+        if not row:
+            abort(404)
+        conn.execute(
+            'UPDATE shopping_items SET status = ?, purchased_by = ?, purchased_at = ? WHERE id = ?',
+            ('purchased', purchased_by, now(), item_id)
+        )
+        conn.commit()
+    finally:
         conn.close()
-        abort(404)
-    conn.execute(
-        'UPDATE shopping_items SET status = ?, purchased_by = ?, purchased_at = ? WHERE id = ?',
-        ('purchased', purchased_by, now(), item_id)
-    )
-    conn.commit()
-    conn.close()
-    flash(f'「{row["name"]}」を購入しました！保管場所を選んで在庫に追加してください。', 'success')
-    # 購入直後に在庫追加フォームへ自動遷移
-    return redirect(url_for('inventory_add',
-                            name=row['name'],
-                            quantity=_fmt_qty(row['quantity']),
-                            unit=row['unit'],
-                            from_shopping=item_id))
+
+    flash(f'「{row["name"]}」を購入済みにしました。', 'success')
+    return redirect(url_for('shopping'))
 
 
 @app.route('/shopping/delete/<int:item_id>', methods=['POST'])
 def shopping_delete(item_id):
     conn = get_db()
-    row = conn.execute('SELECT name FROM shopping_items WHERE id = ?', (item_id,)).fetchone()
-    if not row:
+    try:
+        row = conn.execute('SELECT name FROM shopping_items WHERE id = ?', (item_id,)).fetchone()
+        if not row:
+            abort(404)
+        conn.execute('DELETE FROM shopping_items WHERE id = ?', (item_id,))
+        conn.commit()
+    finally:
         conn.close()
-        abort(404)
-    conn.execute('DELETE FROM shopping_items WHERE id = ?', (item_id,))
-    conn.commit()
-    conn.close()
     flash(f'「{row["name"]}」を削除しました。', 'success')
+    return redirect(url_for('shopping'))
+
+
+@app.route('/shopping/clear-purchased', methods=['POST'])
+def shopping_clear_purchased():
+    conn = get_db()
+    try:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM shopping_items WHERE status = 'purchased'"
+        ).fetchone()[0]
+        conn.execute("DELETE FROM shopping_items WHERE status = 'purchased'")
+        conn.commit()
+    finally:
+        conn.close()
+    flash(f'購入済みアイテム {count} 件を削除しました。', 'success')
     return redirect(url_for('shopping'))
 
 
 @app.route('/shopping/add-to-inventory/<int:item_id>')
 def shopping_add_to_inventory(item_id):
     conn = get_db()
-    row = conn.execute(
-        'SELECT * FROM shopping_items WHERE id = ? AND status = ?',
-        (item_id, 'purchased')
-    ).fetchone()
-    if not row:
+    try:
+        row = conn.execute(
+            'SELECT * FROM shopping_items WHERE id = ? AND status = ?',
+            (item_id, 'purchased')
+        ).fetchone()
+        if not row:
+            abort(404)
+    finally:
         conn.close()
-        abort(404)
-    conn.close()
     return redirect(url_for('inventory_add',
                             name=row['name'],
                             quantity=_fmt_qty(row['quantity']),
@@ -300,15 +390,17 @@ def shopping_add_to_inventory(item_id):
 @app.route('/api/item-history')
 def item_history():
     conn = get_db()
-    rows = conn.execute('''
-        SELECT name, unit, MAX(purchased_at) AS last_bought
-        FROM shopping_items
-        WHERE status = 'purchased'
-        GROUP BY name
-        ORDER BY last_bought DESC
-        LIMIT 50
-    ''').fetchall()
-    conn.close()
+    try:
+        rows = conn.execute('''
+            SELECT name, unit, MAX(purchased_at) AS last_bought
+            FROM shopping_items
+            WHERE status = 'purchased'
+            GROUP BY name
+            ORDER BY last_bought DESC
+            LIMIT 50
+        ''').fetchall()
+    finally:
+        conn.close()
     return jsonify([{'name': r['name'], 'unit': r['unit'] or ''} for r in rows])
 
 
@@ -320,4 +412,5 @@ def inject_now():
 init_db()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
