@@ -148,10 +148,98 @@ body {
   gap: 6px;
 }
 
-/* ── Item List & Cards ────────────────────────── */
+/* ── Swipe to delete ──────────────────────────── */
 .item-list { display: flex; flex-direction: column; gap: 8px; }
 
-.inventory-card, .shopping-card {
+.swipe-wrapper {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.swipe-action {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  background: var(--red);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+}
+
+.swipe-delete-btn {
+  background: none;
+  border: none;
+  color: var(--white);
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.4;
+  padding: 4px;
+}
+
+.inventory-card {
+  position: relative;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  transform: translateX(0);
+  transition: transform 0.25s ease;
+  will-change: transform;
+}
+
+/* ── Inventory card header (name + ±buttons) ─── */
+.item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ── ±個数ボタン ──────────────────────────────── */
+.qty-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.qty-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--beige);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.qty-btn:active { background: var(--beige-dark); border-color: var(--green); }
+
+.qty-value {
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--green-dark);
+  background: var(--green-light);
+  padding: 3px 10px;
+  border-radius: 20px;
+  min-width: 48px;
+  text-align: center;
+}
+
+/* ── Shopping card ────────────────────────────── */
+.shopping-card {
   background: var(--white);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -318,6 +406,17 @@ body {
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
+}
+
+/* ── From-shopping notice ─────────────────────── */
+.from-shopping-notice {
+  background: var(--teal-light);
+  color: var(--teal);
+  border-left: 4px solid var(--teal);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: .9rem;
+  margin-bottom: 14px;
 }
 
 /* ── Form Card ────────────────────────────────── */

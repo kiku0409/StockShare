@@ -4,9 +4,7 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">在庫一覧</h1>
-  <a href="{{ url_for('inventory_add') }}" class="btn btn-primary btn-icon">
-    ＋ 在庫を追加
-  </a>
+  <a href="{{ url_for('inventory_add') }}" class="btn btn-primary btn-icon">＋ 在庫を追加</a>
 </div>
 
 {% set total = namespace(count=0) %}
@@ -29,29 +27,42 @@
         </h2>
         <div class="item-list">
           {% for item in grouped[loc] %}
-            <div class="inventory-card">
-              <div class="card-body">
-                <div class="item-info">
-                  <span class="item-name">{{ item.name }}</span>
-                  <span class="item-qty">{{ item.quantity|int if item.quantity == item.quantity|int else item.quantity }}{{ item.unit }}</span>
-                </div>
-                {% if item.expiry_date %}
-                  <div class="item-expiry">
-                    {% set today = now_str %}
-                    🗓 賞味期限: {{ item.expiry_date }}
-                    {% if item.expiry_date < today %}
-                      <span class="badge badge-expired">期限切れ</span>
-                    {% endif %}
-                  </div>
-                {% endif %}
-                {% if item.memo %}
-                  <div class="item-memo">📝 {{ item.memo }}</div>
-                {% endif %}
+            <div class="swipe-wrapper" id="wrapper-{{ item.id }}">
+              <!-- 背面の削除ボタン -->
+              <div class="swipe-action">
+                <form method="post" action="{{ url_for('inventory_delete', item_id=item.id) }}"
+                      onsubmit="return confirm('「{{ item.name }}」を削除しますか？')">
+                  <button type="submit" class="swipe-delete-btn">🗑<br>削除</button>
+                </form>
               </div>
-              <form method="post" action="{{ url_for('inventory_delete', item_id=item.id) }}" class="delete-form"
-                    onsubmit="return confirm('「{{ item.name }}」を削除しますか？')">
-                <button type="submit" class="btn btn-danger btn-sm">削除</button>
-              </form>
+              <!-- カード本体（左スワイプで削除ボタン出現） -->
+              <div class="inventory-card swipeable">
+                <div class="card-body">
+                  <div class="item-header">
+                    <span class="item-name">{{ item.name }}</span>
+                    <!-- ±個数コントロール -->
+                    <div class="qty-control">
+                      <button class="qty-btn" type="button"
+                              onclick="updateQty({{ item.id }}, -1, this)">−</button>
+                      <span class="qty-value" id="qty-{{ item.id }}"
+                            data-unit="{{ item.unit }}">{{ item.quantity|int if item.quantity == item.quantity|int else item.quantity }}{{ item.unit }}</span>
+                      <button class="qty-btn" type="button"
+                              onclick="updateQty({{ item.id }}, 1, this)">＋</button>
+                    </div>
+                  </div>
+                  {% if item.expiry_date %}
+                    <div class="item-expiry">
+                      🗓 賞味期限: {{ item.expiry_date }}
+                      {% if item.expiry_date < now_str %}
+                        <span class="badge badge-expired">期限切れ</span>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                  {% if item.memo %}
+                    <div class="item-memo">📝 {{ item.memo }}</div>
+                  {% endif %}
+                </div>
+              </div>
             </div>
           {% endfor %}
         </div>
@@ -63,4 +74,80 @@
 <div class="fab-area">
   <a href="{{ url_for('shopping') }}" class="btn btn-secondary btn-fab">🛒 買い物リスト</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── スワイプで削除 ─────────────────────────────────────────
+function initSwipe() {
+  document.querySelectorAll('.swipeable').forEach(card => {
+    let startX = 0, startY = 0, isOpen = false;
+    const REVEAL = 80;
+
+    card.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      card.style.transition = 'none';
+    }, { passive: true });
+
+    card.addEventListener('touchmove', e => {
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!isOpen && Math.abs(dy) > Math.abs(dx)) return;
+      if (!isOpen && dx > 0) return;
+      e.preventDefault();
+      const base = isOpen ? -REVEAL : 0;
+      const translate = Math.max(-REVEAL, Math.min(0, base + dx));
+      card.style.transform = `translateX(${translate}px)`;
+    }, { passive: false });
+
+    card.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - startX;
+      card.style.transition = 'transform 0.25s ease';
+      if (isOpen) {
+        isOpen = dx <= 30;
+      } else {
+        isOpen = dx < -40;
+      }
+      card.style.transform = isOpen ? `translateX(-${REVEAL}px)` : 'translateX(0)';
+    });
+  });
+
+  // 他の場所をタップで閉じる
+  document.addEventListener('touchstart', e => {
+    if (!e.target.closest('.swipe-wrapper')) {
+      document.querySelectorAll('.swipeable').forEach(c => {
+        c.style.transition = 'transform 0.25s ease';
+        c.style.transform = 'translateX(0)';
+      });
+    }
+  }, { passive: true });
+}
+
+// ── ±個数ボタン ────────────────────────────────────────────
+function updateQty(id, delta, btn) {
+  fetch(`/inventory/update-qty/${id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `delta=${delta}`
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.deleted) {
+      const wrapper = document.getElementById(`wrapper-${id}`);
+      wrapper.style.transition = 'opacity 0.3s ease, max-height 0.4s ease';
+      wrapper.style.overflow = 'hidden';
+      wrapper.style.opacity = '0';
+      wrapper.style.maxHeight = '0';
+      setTimeout(() => wrapper.remove(), 400);
+    } else {
+      const span = document.getElementById(`qty-${id}`);
+      span.textContent = data.quantity + (span.dataset.unit || '');
+    }
+  })
+  .catch(() => {});
+}
+
+document.addEventListener('DOMContentLoaded', initSwipe);
+</script>
 {% endblock %}

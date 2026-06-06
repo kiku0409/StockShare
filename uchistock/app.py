@@ -1,7 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, jsonify
 
 app = Flask(__name__)
 app.secret_key = 'uchistock-secret-key'
@@ -54,6 +54,10 @@ def now():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
+def _fmt_qty(qty):
+    return int(qty) if qty == int(qty) else qty
+
+
 # ── Inventory ──────────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -74,10 +78,12 @@ def index():
 
 @app.route('/inventory/add', methods=['GET', 'POST'])
 def inventory_add():
+    from_shopping = request.args.get('from_shopping', '')
     prefill = {
         'name': request.args.get('name', ''),
         'quantity': request.args.get('quantity', '1'),
         'unit': request.args.get('unit', ''),
+        'from_shopping': from_shopping,
     }
 
     if request.method == 'POST':
@@ -87,6 +93,7 @@ def inventory_add():
         location = request.form.get('location', '').strip()
         expiry_date = request.form.get('expiry_date', '').strip()
         memo = request.form.get('memo', '').strip()
+        from_shopping_id = request.form.get('from_shopping', '').strip()
 
         errors = []
         if not name:
@@ -115,10 +122,18 @@ def inventory_add():
             (name, float(quantity), unit, location,
              expiry_date or None, memo or None, now())
         )
+        if from_shopping_id:
+            try:
+                conn.execute(
+                    'UPDATE shopping_items SET added_to_inventory = 1 WHERE id = ?',
+                    (int(from_shopping_id),)
+                )
+            except (ValueError, Exception):
+                pass
         conn.commit()
         conn.close()
         flash(f'「{name}」を在庫に追加しました。', 'success')
-        return redirect(url_for('index'))
+        return redirect(url_for('shopping') if from_shopping_id else url_for('index'))
 
     return render_template('inventory_form.html', locations=LOCATIONS, prefill=prefill)
 
@@ -135,6 +150,32 @@ def inventory_delete(item_id):
     conn.close()
     flash(f'「{row["name"]}」を削除しました。', 'success')
     return redirect(url_for('index'))
+
+
+@app.route('/inventory/update-qty/<int:item_id>', methods=['POST'])
+def inventory_update_qty(item_id):
+    try:
+        delta = int(request.form.get('delta', '0'))
+    except ValueError:
+        return jsonify({'error': 'invalid'}), 400
+
+    conn = get_db()
+    row = conn.execute('SELECT * FROM inventory_items WHERE id = ?', (item_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'not found'}), 404
+
+    new_qty = row['quantity'] + delta
+    if new_qty <= 0:
+        conn.execute('DELETE FROM inventory_items WHERE id = ?', (item_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'deleted': True})
+
+    conn.execute('UPDATE inventory_items SET quantity = ? WHERE id = ?', (new_qty, item_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'quantity': int(new_qty) if new_qty == int(new_qty) else new_qty})
 
 
 # ── Shopping ───────────────────────────────────────────────────────────────
@@ -215,8 +256,13 @@ def shopping_purchase(item_id):
     )
     conn.commit()
     conn.close()
-    flash(f'「{row["name"]}」を購入済みにしました。', 'success')
-    return redirect(url_for('shopping'))
+    flash(f'「{row["name"]}」を購入しました！保管場所を選んで在庫に追加してください。', 'success')
+    # 購入直後に在庫追加フォームへ自動遷移
+    return redirect(url_for('inventory_add',
+                            name=row['name'],
+                            quantity=_fmt_qty(row['quantity']),
+                            unit=row['unit'],
+                            from_shopping=item_id))
 
 
 @app.route('/shopping/delete/<int:item_id>', methods=['POST'])
@@ -243,20 +289,27 @@ def shopping_add_to_inventory(item_id):
     if not row:
         conn.close()
         abort(404)
-    conn.execute(
-        'UPDATE shopping_items SET added_to_inventory = 1 WHERE id = ?',
-        (item_id,)
-    )
-    conn.commit()
     conn.close()
     return redirect(url_for('inventory_add',
                             name=row['name'],
                             quantity=_fmt_qty(row['quantity']),
-                            unit=row['unit']))
+                            unit=row['unit'],
+                            from_shopping=item_id))
 
 
-def _fmt_qty(qty):
-    return int(qty) if qty == int(qty) else qty
+@app.route('/api/item-history')
+def item_history():
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT name, unit, MAX(purchased_at) AS last_bought
+        FROM shopping_items
+        WHERE status = 'purchased'
+        GROUP BY name
+        ORDER BY last_bought DESC
+        LIMIT 50
+    ''').fetchall()
+    conn.close()
+    return jsonify([{'name': r['name'], 'unit': r['unit'] or ''} for r in rows])
 
 
 @app.context_processor
