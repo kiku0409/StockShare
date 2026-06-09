@@ -1,12 +1,13 @@
 import sqlite3
 import os
-import logging
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, abort, jsonify
+from flask_wtf.csrf import CSRFProtect
 
 app = Flask(__name__)
-# secret_key は環境変数から取得。未設定時は開発用の値を使う
 app.secret_key = os.environ.get('SECRET_KEY', 'uchistock-dev-key-change-in-prod')
+app.config['WTF_CSRF_TIME_LIMIT'] = None  # タブを長時間開いていてもCSRFエラーにならない
+csrf = CSRFProtect(app)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'uchistock.db')
 
@@ -60,6 +61,11 @@ def now():
 
 def _fmt_qty(qty):
     return int(qty) if qty == int(qty) else qty
+
+
+@app.template_filter('fmt_qty')
+def fmt_qty_filter(qty):
+    return _fmt_qty(qty)
 
 
 def _validate_item(form):
@@ -255,7 +261,7 @@ def inventory_update_qty(item_id):
         else:
             conn.execute('UPDATE inventory_items SET quantity = ? WHERE id = ?', (new_qty, item_id))
             conn.commit()
-            result = jsonify({'quantity': int(new_qty) if new_qty == int(new_qty) else new_qty})
+            result = jsonify({'quantity': _fmt_qty(new_qty)})
     finally:
         conn.close()
 
@@ -350,6 +356,24 @@ def shopping_delete(item_id):
     finally:
         conn.close()
     flash(f'「{row["name"]}」を削除しました。', 'success')
+    return redirect(url_for('shopping'))
+
+
+@app.route('/shopping/unpurchase/<int:item_id>', methods=['POST'])
+def shopping_unpurchase(item_id):
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT * FROM shopping_items WHERE id = ?', (item_id,)).fetchone()
+        if not row:
+            abort(404)
+        conn.execute(
+            'UPDATE shopping_items SET status = ?, purchased_by = NULL, purchased_at = NULL WHERE id = ?',
+            ('pending', item_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    flash(f'「{row["name"]}」を未購入に戻しました。', 'success')
     return redirect(url_for('shopping'))
 
 

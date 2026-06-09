@@ -17,6 +17,7 @@
       action="{{ url_for('inventory_edit', item_id=item_id) if edit_mode else url_for('inventory_add') }}"
       class="form-card">
 
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if not edit_mode %}
     <input type="hidden" name="from_shopping" value="{{ prefill.get('from_shopping', '') }}">
   {% endif %}

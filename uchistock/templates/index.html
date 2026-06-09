@@ -34,6 +34,7 @@
                    class="swipe-action-btn swipe-edit-btn">✏️<br>編集</a>
                 <form method="post" action="{{ url_for('inventory_delete', item_id=item.id) }}"
                       data-name="{{ item.name }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="swipe-action-btn swipe-delete-btn">🗑<br>削除</button>
                 </form>
               </div>
@@ -46,7 +47,7 @@
                       <button class="qty-btn" type="button"
                               onclick="updateQty({{ item.id }}, -1, this)">−</button>
                       <span class="qty-value" id="qty-{{ item.id }}"
-                            data-unit="{{ item.unit }}">{{ item.quantity|int if item.quantity == item.quantity|int else item.quantity }}{{ item.unit }}</span>
+                            data-unit="{{ item.unit }}">{{ item.quantity | fmt_qty }}{{ item.unit }}</span>
                       <button class="qty-btn" type="button"
                               onclick="updateQty({{ item.id }}, 1, this)">＋</button>
                     </div>
@@ -151,11 +152,27 @@ function initSwipe() {
   });
 }
 
+// ── トースト通知 ───────────────────────────────────────────
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);'
+    + 'background:#333;color:#fff;padding:8px 18px;border-radius:8px;'
+    + 'font-size:.85rem;z-index:999;pointer-events:none;opacity:1;transition:opacity .4s .8s';
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '0'; });
+  setTimeout(() => t.remove(), 1400);
+}
+
 // ── ±個数ボタン ────────────────────────────────────────────
 function updateQty(id, delta, btn) {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
   fetch(`/inventory/update-qty/${id}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': csrfToken
+    },
     body: `delta=${delta}`
   })
   .then(r => r.json())
@@ -167,6 +184,7 @@ function updateQty(id, delta, btn) {
       wrapper.style.opacity = '0';
       wrapper.style.maxHeight = '0';
       setTimeout(() => wrapper.remove(), 400);
+      showToast('削除しました');
     } else {
       const span = document.getElementById(`qty-${id}`);
       span.textContent = data.quantity + (span.dataset.unit || '');
