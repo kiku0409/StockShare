@@ -3,13 +3,16 @@ import os
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, abort, jsonify
 from flask_wtf.csrf import CSRFProtect
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.environ.get('SECRET_KEY', 'uchistock-dev-key-change-in-prod')
-app.config['WTF_CSRF_TIME_LIMIT'] = None  # タブを長時間開いていてもCSRFエラーにならない
+app.config['WTF_CSRF_TIME_LIMIT'] = None
 csrf = CSRFProtect(app)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'uchistock.db')
+# Railway ボリュームを /data にマウントした場合はそこを使う
+DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(__file__), 'uchistock.db'))
 
 LOCATIONS = ['冷蔵庫', '冷凍庫', '常温', 'その他']
 MEMBERS = ['母', '父', '私']
@@ -437,4 +440,5 @@ init_db()
 
 if __name__ == '__main__':
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
-    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
