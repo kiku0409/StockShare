@@ -4,9 +4,7 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">在庫一覧</h1>
-  <a href="{{ url_for('inventory_add') }}" class="btn btn-primary btn-icon">
-    ＋ 在庫を追加
-  </a>
+  <a href="{{ url_for('inventory_add') }}" class="btn btn-primary btn-icon">＋ 在庫を追加</a>
 </div>
 
 {% set total = namespace(count=0) %}
@@ -29,29 +27,44 @@
         </h2>
         <div class="item-list">
           {% for item in grouped[loc] %}
-            <div class="inventory-card">
-              <div class="card-body">
-                <div class="item-info">
-                  <span class="item-name">{{ item.name }}</span>
-                  <span class="item-qty">{{ item.quantity|int if item.quantity == item.quantity|int else item.quantity }}{{ item.unit }}</span>
-                </div>
-                {% if item.expiry_date %}
-                  <div class="item-expiry">
-                    {% set today = now_str %}
-                    🗓 賞味期限: {{ item.expiry_date }}
-                    {% if item.expiry_date < today %}
-                      <span class="badge badge-expired">期限切れ</span>
-                    {% endif %}
-                  </div>
-                {% endif %}
-                {% if item.memo %}
-                  <div class="item-memo">📝 {{ item.memo }}</div>
-                {% endif %}
+            <div class="swipe-wrapper" id="wrapper-{{ item.id }}">
+              <!-- 背面のアクションボタン（スワイプで出現） -->
+              <div class="swipe-action">
+                <a href="{{ url_for('inventory_edit', item_id=item.id) }}"
+                   class="swipe-action-btn swipe-edit-btn">✏️<br>編集</a>
+                <form method="post" action="{{ url_for('inventory_delete', item_id=item.id) }}"
+                      data-name="{{ item.name }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="swipe-action-btn swipe-delete-btn">🗑<br>削除</button>
+                </form>
               </div>
-              <form method="post" action="{{ url_for('inventory_delete', item_id=item.id) }}" class="delete-form"
-                    onsubmit="return confirm('「{{ item.name }}」を削除しますか？')">
-                <button type="submit" class="btn btn-danger btn-sm">削除</button>
-              </form>
+              <!-- カード本体 -->
+              <div class="inventory-card swipeable">
+                <div class="card-body">
+                  <div class="item-header">
+                    <span class="item-name">{{ item.name }}</span>
+                    <div class="qty-control">
+                      <button class="qty-btn" type="button"
+                              onclick="updateQty({{ item.id }}, -1, this)">−</button>
+                      <span class="qty-value" id="qty-{{ item.id }}"
+                            data-unit="{{ item.unit }}">{{ item.quantity | fmt_qty }}{{ item.unit }}</span>
+                      <button class="qty-btn" type="button"
+                              onclick="updateQty({{ item.id }}, 1, this)">＋</button>
+                    </div>
+                  </div>
+                  {% if item.expiry_date %}
+                    <div class="item-expiry">
+                      🗓 賞味期限: {{ item.expiry_date }}
+                      {% if item.expiry_date < now_str %}
+                        <span class="badge badge-expired">期限切れ</span>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                  {% if item.memo %}
+                    <div class="item-memo">📝 {{ item.memo }}</div>
+                  {% endif %}
+                </div>
+              </div>
             </div>
           {% endfor %}
         </div>
@@ -63,4 +76,123 @@
 <div class="fab-area">
   <a href="{{ url_for('shopping') }}" class="btn btn-secondary btn-fab">🛒 買い物リスト</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── スワイプで削除・編集 (Pointer Events API — タッチ・マウス両対応) ──────────
+function initSwipe() {
+  const REVEAL = 160; // 編集+削除ボタン分
+
+  document.querySelectorAll('.swipeable').forEach(card => {
+    let startX = 0, startY = 0, isOpen = false, swipeActive = false;
+
+    card.addEventListener('pointerdown', e => {
+      startX = e.clientX;
+      startY = e.clientY;
+      swipeActive = false;
+      card.style.transition = 'none';
+    });
+
+    card.addEventListener('pointermove', e => {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if (!swipeActive) {
+        if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+        if (Math.abs(dy) > Math.abs(dx)) return; // 縦スクロール優先
+        if (dx > 0 && !isOpen) return;           // 閉じているときの右スワイプは無視
+        swipeActive = true;
+      }
+
+      const base = isOpen ? -REVEAL : 0;
+      const translate = Math.max(-REVEAL, Math.min(0, base + dx));
+      card.style.transform = `translateX(${translate}px)`;
+    });
+
+    card.addEventListener('pointerup', e => {
+      card.style.transition = 'transform 0.25s ease';
+      if (!swipeActive) {
+        card.style.transform = isOpen ? `translateX(-${REVEAL}px)` : 'translateX(0)';
+        return;
+      }
+      swipeActive = false;
+      const dx = e.clientX - startX;
+      if (isOpen) {
+        isOpen = dx < 30;
+      } else {
+        isOpen = dx < -REVEAL / 2;
+      }
+      card.style.transform = isOpen ? `translateX(-${REVEAL}px)` : 'translateX(0)';
+    });
+
+    card.addEventListener('pointercancel', () => {
+      swipeActive = false;
+      card.style.transition = 'transform 0.25s ease';
+      card.style.transform = isOpen ? `translateX(-${REVEAL}px)` : 'translateX(0)';
+    });
+  });
+
+  // スワイプ外タップで閉じる
+  document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.swipe-wrapper')) {
+      document.querySelectorAll('.swipeable').forEach(c => {
+        c.style.transition = 'transform 0.25s ease';
+        c.style.transform = 'translateX(0)';
+      });
+    }
+  });
+
+  // 削除確認ダイアログ（data-name 属性から取得し XSS を防止）
+  document.querySelectorAll('.swipe-action form').forEach(form => {
+    form.addEventListener('submit', e => {
+      const name = form.dataset.name || 'このアイテム';
+      if (!confirm(`「${name}」を削除しますか？`)) e.preventDefault();
+    });
+  });
+}
+
+// ── トースト通知 ───────────────────────────────────────────
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);'
+    + 'background:#333;color:#fff;padding:8px 18px;border-radius:8px;'
+    + 'font-size:.85rem;z-index:999;pointer-events:none;opacity:1;transition:opacity .4s .8s';
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '0'; });
+  setTimeout(() => t.remove(), 1400);
+}
+
+// ── ±個数ボタン ────────────────────────────────────────────
+function updateQty(id, delta, btn) {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+  fetch(`/inventory/update-qty/${id}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': csrfToken
+    },
+    body: `delta=${delta}`
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.deleted) {
+      const wrapper = document.getElementById(`wrapper-${id}`);
+      wrapper.style.transition = 'opacity 0.3s ease, max-height 0.4s ease';
+      wrapper.style.overflow = 'hidden';
+      wrapper.style.opacity = '0';
+      wrapper.style.maxHeight = '0';
+      setTimeout(() => wrapper.remove(), 400);
+      showToast('削除しました');
+    } else {
+      const span = document.getElementById(`qty-${id}`);
+      span.textContent = data.quantity + (span.dataset.unit || '');
+    }
+  })
+  .catch(() => {});
+}
+
+document.addEventListener('DOMContentLoaded', initSwipe);
+</script>
 {% endblock %}

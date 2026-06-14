@@ -1,13 +1,27 @@
 {% extends "base.html" %}
-{% block title %}在庫を追加 - うちストック{% endblock %}
+{% block title %}{{ '在庫を編集' if edit_mode else '在庫を追加' }} - うちストック{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <a href="{{ url_for('index') }}" class="back-link">← 戻る</a>
-  <h1 class="page-title">在庫を追加</h1>
+  <h1 class="page-title">{{ '在庫を編集' if edit_mode else '在庫を追加' }}</h1>
 </div>
 
-<form method="post" action="{{ url_for('inventory_add') }}" class="form-card">
+{% if not edit_mode and prefill.get('from_shopping') %}
+  <div class="from-shopping-notice">
+    🛒 購入した商品を在庫に追加します。保管場所を選んで保存してください。
+  </div>
+{% endif %}
+
+<form method="post"
+      action="{{ url_for('inventory_edit', item_id=item_id) if edit_mode else url_for('inventory_add') }}"
+      class="form-card">
+
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if not edit_mode %}
+    <input type="hidden" name="from_shopping" value="{{ prefill.get('from_shopping', '') }}">
+  {% endif %}
+
   <div class="form-group">
     <label class="form-label" for="name">商品名 <span class="required">*</span></label>
     <input class="form-input" type="text" id="name" name="name"
@@ -58,8 +72,14 @@
   </div>
 
   <div class="form-actions">
-    <a href="{{ url_for('index') }}" class="btn btn-ghost">キャンセル</a>
-    <button type="submit" class="btn btn-primary">在庫に追加する</button>
+    {% if not edit_mode and prefill.get('from_shopping') %}
+      <a href="{{ url_for('shopping') }}" class="btn btn-ghost">スキップ</a>
+    {% else %}
+      <a href="{{ url_for('index') }}" class="btn btn-ghost">キャンセル</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">
+      {{ '変更を保存する' if edit_mode else '在庫に追加する' }}
+    </button>
   </div>
 </form>
 {% endblock %}

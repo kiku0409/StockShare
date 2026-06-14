@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root {
+  --color-buy: #ef4444;
+  --color-buy-light: #fef2f2;
+  --color-home: #22c55e;
+  --color-home-light: #f0fdf4;
+}
+
+body {
+  background: #f9fafb;
+  color: #111827;
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+}

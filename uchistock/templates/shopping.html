@@ -20,7 +20,7 @@
           <div class="card-body">
             <div class="item-info">
               <span class="item-name">{{ item.name }}</span>
-              <span class="item-qty">{{ item.quantity|int if item.quantity == item.quantity|int else item.quantity }}{{ item.unit }}</span>
+              <span class="item-qty">{{ item.quantity | fmt_qty }}{{ item.unit }}</span>
             </div>
             <div class="item-meta">
               <span class="badge badge-member">{{ item.added_by }}</span>
@@ -28,13 +28,14 @@
             </div>
           </div>
           <div class="card-actions">
-            <!-- 購入済みにする -->
+            <!-- 購入済みにする（誰が買ったか選択） -->
             <details class="purchase-dropdown">
               <summary class="btn btn-success btn-sm">購入済みにする ▾</summary>
               <div class="purchase-panel">
                 <p class="purchase-label">誰が買いましたか？</p>
                 {% for member in members %}
-                  <form method="post" action="{{ url_for('shopping_purchase', item_id=item.id) }}" style="display:inline">
+                  <form method="post" action="{{ url_for('shopping_purchase', item_id=item.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="purchased_by" value="{{ member }}">
                     <button type="submit" class="btn btn-outline btn-sm">{{ member }}</button>
                   </form>
@@ -42,7 +43,8 @@
               </div>
             </details>
             <form method="post" action="{{ url_for('shopping_delete', item_id=item.id) }}"
-                  onsubmit="return confirm('「{{ item.name }}」を削除しますか？')">
+                  data-name="{{ item.name }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger btn-sm">削除</button>
             </form>
           </div>
@@ -59,16 +61,23 @@
 <!-- 購入済み -->
 {% if purchased %}
 <section class="shopping-section">
-  <h2 class="section-title purchased-title">購入済み
-    <span class="item-count">{{ purchased|length }}点</span>
-  </h2>
+  <div class="section-header-row">
+    <h2 class="section-title purchased-title">購入済み
+      <span class="item-count">{{ purchased|length }}点</span>
+    </h2>
+    <form method="post" action="{{ url_for('shopping_clear_purchased') }}"
+          data-confirm="購入済みアイテムをすべて削除しますか？">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-ghost btn-sm">一括クリア</button>
+    </form>
+  </div>
   <div class="item-list">
     {% for item in purchased %}
       <div class="shopping-card purchased">
         <div class="card-body">
           <div class="item-info">
             <span class="item-name done">{{ item.name }}</span>
-            <span class="item-qty">{{ item.quantity|int if item.quantity == item.quantity|int else item.quantity }}{{ item.unit }}</span>
+            <span class="item-qty">{{ item.quantity | fmt_qty }}{{ item.unit }}</span>
           </div>
           <div class="item-meta">
             <span class="badge badge-purchased">{{ item.purchased_by }} が購入</span>
@@ -84,8 +93,13 @@
           {% else %}
             <span class="badge badge-stocked">在庫追加済み</span>
           {% endif %}
+          <form method="post" action="{{ url_for('shopping_unpurchase', item_id=item.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-ghost btn-sm">未購入に戻す</button>
+          </form>
           <form method="post" action="{{ url_for('shopping_delete', item_id=item.id) }}"
-                onsubmit="return confirm('「{{ item.name }}」を削除しますか？')">
+                data-name="{{ item.name }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger btn-sm">削除</button>
           </form>
         </div>
@@ -94,4 +108,28 @@
   </div>
 </section>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 削除確認ダイアログを data 属性から取得（XSS対策）
+document.querySelectorAll('form[data-name]').forEach(form => {
+  form.addEventListener('submit', e => {
+    const name = form.dataset.name || 'このアイテム';
+    if (!confirm(`「${name}」を削除しますか？`)) e.preventDefault();
+  });
+});
+document.querySelectorAll('form[data-confirm]').forEach(form => {
+  form.addEventListener('submit', e => {
+    if (!confirm(form.dataset.confirm)) e.preventDefault();
+  });
+});
+
+// <details> パネルを背景タップで閉じる
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest('details')) {
+    document.querySelectorAll('details[open]').forEach(d => d.removeAttribute('open'));
+  }
+});
+</script>
 {% endblock %}

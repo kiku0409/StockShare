@@ -83,6 +83,7 @@ body {
 }
 .flash-success { background: var(--green-light); color: var(--green-dark); border-left: 4px solid var(--green); }
 .flash-error   { background: var(--red-light);   color: var(--red);        border-left: 4px solid var(--red); }
+.flash-warning { background: #fff8e1;            color: #8a5200;           border-left: 4px solid #f0a500; }
 
 /* ── Page Header ──────────────────────────────── */
 .page-header {
@@ -148,10 +149,116 @@ body {
   gap: 6px;
 }
 
-/* ── Item List & Cards ────────────────────────── */
+/* ── Swipe to delete ──────────────────────────── */
 .item-list { display: flex; flex-direction: column; gap: 8px; }
 
-.inventory-card, .shopping-card {
+.swipe-wrapper {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.swipe-action {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 160px; /* 編集 + 削除 */
+  display: flex;
+  align-items: stretch;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.swipe-action-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--white);
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.5;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.swipe-edit-btn   { background: var(--teal); }
+.swipe-delete-btn { background: var(--red); }
+
+.swipe-action form {
+  flex: 1;
+  display: flex;
+}
+.swipe-action form .swipe-action-btn {
+  width: 100%;
+}
+
+.inventory-card {
+  position: relative;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  transform: translateX(0);
+  transition: transform 0.25s ease;
+  will-change: transform;
+  touch-action: pan-y; /* 縦スクロールはブラウザに委ねる */
+  cursor: grab;
+}
+.inventory-card:active { cursor: grabbing; }
+
+/* ── Inventory card header (name + ±buttons) ─── */
+.item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ── ±個数ボタン ──────────────────────────────── */
+.qty-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.qty-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--beige);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.qty-btn:active { background: var(--beige-dark); border-color: var(--green); }
+
+.qty-value {
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--green-dark);
+  background: var(--green-light);
+  padding: 3px 10px;
+  border-radius: 20px;
+  min-width: 48px;
+  text-align: center;
+}
+
+/* ── Shopping card ────────────────────────────── */
+.shopping-card {
   background: var(--white);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -266,8 +373,17 @@ body {
   color: var(--text-muted);
   margin-bottom: 8px;
 }
-.purchase-panel form { display: block; margin-bottom: 4px; }
+.purchase-panel form { display: block; margin-bottom: 4px; } /* inline style 不要 */
 .purchase-panel .btn-outline { width: 100%; }
+
+/* ── 購入済みセクションヘッダー（タイトル＋一括クリア） ─── */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.section-header-row .section-title { margin-bottom: 0; }
 
 /* ── Section titles ───────────────────────────── */
 .shopping-section { margin-bottom: 24px; }
@@ -308,9 +424,6 @@ body {
   border-radius: var(--radius);
 }
 
-/* ── Delete form inline ───────────────────────── */
-.delete-form { flex-shrink: 0; }
-
 /* ── FAB area ─────────────────────────────────── */
 .fab-area {
   position: fixed;
@@ -318,6 +431,17 @@ body {
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
+}
+
+/* ── From-shopping notice ─────────────────────── */
+.from-shopping-notice {
+  background: var(--teal-light);
+  color: var(--teal);
+  border-left: 4px solid var(--teal);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: .9rem;
+  margin-bottom: 14px;
 }
 
 /* ── Form Card ────────────────────────────────── */
