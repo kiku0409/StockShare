@@ -1,0 +1,25 @@
+export type ItemStatus = 'home' | 'buy'
+
+export interface Family {
+  id: string
+  name: string
+  invite_token: string
+  created_at: string
+}
+
+export interface Member {
+  id: string
+  family_id: string
+  display_name: string
+  created_at: string
+}
+
+export interface Item {
+  id: string
+  family_id: string
+  name: string
+  status: ItemStatus
+  updated_by_member_id: string | null
+  updated_at: string
+  members?: Member
+}
