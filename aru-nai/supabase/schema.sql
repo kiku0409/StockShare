@@ -19,7 +19,7 @@ create table if not exists items (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references families(id) on delete cascade,
   name text not null,
-  status text not null check (status in ('home', 'buy')) default 'buy',
+  status text not null check (status in ('home', 'buy', 'none')) default 'buy',
   updated_by_member_id uuid references members(id) on delete set null,
   updated_at timestamptz not null default now()
 );

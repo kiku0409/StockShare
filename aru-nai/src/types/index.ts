@@ -1,4 +1,4 @@
-export type ItemStatus = 'home' | 'buy'
+export type ItemStatus = 'home' | 'buy' | 'none'
 
 export interface Family {
   id: string

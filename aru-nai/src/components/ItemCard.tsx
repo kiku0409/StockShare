@@ -17,29 +17,33 @@ function formatRelativeTime(dateStr: string): string {
 interface Props {
   item: Item
   onToggle: (item: Item) => void
+  onArchive: (item: Item) => void
   onDelete: (item: Item) => void
 }
 
-export default function ItemCard({ item, onToggle, onDelete }: Props) {
+export default function ItemCard({ item, onToggle, onArchive, onDelete }: Props) {
   const updaterName = item.members?.display_name ?? '不明'
   const timeAgo = formatRelativeTime(item.updated_at)
+  const isNone = item.status === 'none'
 
   return (
-    <div className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition select-none">
+    <div className={`flex items-center gap-3 bg-white rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition select-none ${isNone ? 'opacity-50' : ''}`}>
       <button
         onClick={() => onToggle(item)}
         className="flex-1 flex flex-col gap-0.5 text-left min-w-0"
       >
-        <span className="text-base font-medium text-gray-900 truncate">{item.name}</span>
+        <span className={`text-base font-medium truncate ${isNone ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+          {item.name}
+        </span>
         <span className="text-xs text-gray-400">
-          {updaterName}が{timeAgo}に更新
+          {isNone ? 'タップで「買う」に戻す' : `${updaterName}が${timeAgo}に更新`}
         </span>
       </button>
 
       <button
-        onClick={() => onDelete(item)}
+        onClick={() => isNone ? onDelete(item) : onArchive(item)}
         className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition"
-        aria-label="削除"
+        aria-label={isNone ? '完全に削除' : '家にないへ移動'}
       >
         ×
       </button>

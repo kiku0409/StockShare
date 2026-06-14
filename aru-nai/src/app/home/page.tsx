@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { storage } from '@/lib/storage'
-import type { Item } from '@/types'
+import type { Item, ItemStatus } from '@/types'
 import ItemCard from '@/components/ItemCard'
 import AddItemModal from '@/components/AddItemModal'
 
@@ -51,23 +51,33 @@ export default function HomePage() {
     return () => { supabase.removeChannel(channel) }
   }, [familyId, fetchItems])
 
-  const handleToggle = async (item: Item) => {
-    const newStatus = item.status === 'home' ? 'buy' : 'home'
+  const updateItemStatus = async (item: Item, newStatus: ItemStatus) => {
     await supabase
       .from('items')
       .update({ status: newStatus, updated_by_member_id: memberId, updated_at: new Date().toISOString() })
       .eq('id', item.id)
     setItems((prev) =>
-      prev.map((i) => i.id === item.id ? { ...i, status: newStatus, updated_at: new Date().toISOString(), members: { id: memberId!, family_id: familyId!, display_name: memberName!, created_at: '' } } : i)
+      prev.map((i) => i.id === item.id
+        ? { ...i, status: newStatus, updated_at: new Date().toISOString(), members: { id: memberId!, family_id: familyId!, display_name: memberName!, created_at: '' } }
+        : i
+      )
     )
   }
+
+  const handleToggle = (item: Item) => {
+    if (item.status === 'home') return updateItemStatus(item, 'buy')
+    if (item.status === 'buy') return updateItemStatus(item, 'home')
+    return updateItemStatus(item, 'buy') // none → buy (復元)
+  }
+
+  const handleArchive = (item: Item) => updateItemStatus(item, 'none')
 
   const handleDelete = async (item: Item) => {
     await supabase.from('items').delete().eq('id', item.id)
     setItems((prev) => prev.filter((i) => i.id !== item.id))
   }
 
-  const handleAdd = async (name: string, status: Item['status']) => {
+  const handleAdd = async (name: string, status: ItemStatus) => {
     const { data } = await supabase
       .from('items')
       .insert({ family_id: familyId, name, status, updated_by_member_id: memberId })
@@ -78,12 +88,14 @@ export default function HomePage() {
 
   const buyItems = items.filter((i) => i.status === 'buy')
   const homeItems = items.filter((i) => i.status === 'home')
+  const noneItems = items.filter((i) => i.status === 'none')
 
-  const lastUpdated = items[0]
+  const activeItems = items.filter((i) => i.status !== 'none')
+  const lastUpdated = activeItems[0]
     ? (() => {
-        const diff = Date.now() - new Date(items[0].updated_at).getTime()
+        const diff = Date.now() - new Date(activeItems[0].updated_at).getTime()
         const min = Math.floor(diff / 60000)
-        const name = items[0].members?.display_name ?? ''
+        const name = activeItems[0].members?.display_name ?? ''
         if (min < 1) return `${name}がたった今更新`
         if (min < 60) return `${name}が${min}分前に更新`
         return `${name}が${Math.floor(min / 60)}時間前に更新`
@@ -133,7 +145,7 @@ export default function HomePage() {
                   <p className="text-sm text-gray-400 text-center py-4">買うものはありません</p>
                 ) : (
                   buyItems.map((item) => (
-                    <ItemCard key={item.id} item={item} onToggle={handleToggle} onDelete={handleDelete} />
+                    <ItemCard key={item.id} item={item} onToggle={handleToggle} onArchive={handleArchive} onDelete={handleDelete} />
                   ))
                 )}
               </div>
@@ -155,11 +167,31 @@ export default function HomePage() {
                   <p className="text-sm text-gray-400 text-center py-4">家にあるものはありません</p>
                 ) : (
                   homeItems.map((item) => (
-                    <ItemCard key={item.id} item={item} onToggle={handleToggle} onDelete={handleDelete} />
+                    <ItemCard key={item.id} item={item} onToggle={handleToggle} onArchive={handleArchive} onDelete={handleDelete} />
                   ))
                 )}
               </div>
             </section>
+
+            {/* 家にないセクション */}
+            {noneItems.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">📦</span>
+                    <h2 className="text-sm font-bold text-gray-400">家にない</h2>
+                  </div>
+                  <span className="bg-gray-100 text-gray-400 text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                    {noneItems.length}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {noneItems.map((item) => (
+                    <ItemCard key={item.id} item={item} onToggle={handleToggle} onArchive={handleArchive} onDelete={handleDelete} />
+                  ))}
+                </div>
+              </section>
+            )}
           </>
         )}
       </main>
