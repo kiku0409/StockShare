@@ -7,21 +7,23 @@
 
 ---
 
-## 現在の状態
+## 現在の状態（2026-06-15 更新）
 
 | 項目 | 状態 |
 |------|------|
-| MVPコード | ✅ 完成・GitHub プッシュ済み |
-| Supabase | ✅ セットアップ済み・ローカルで動作確認済み |
-| Vercel デプロイ | ❌ **未完了（ここが次のタスク）** |
+| MVPコード | ✅ 完成・プッシュ済み |
+| 追加機能（家にないゾーン・設定・招待URL表示） | ✅ 実装済み |
+| Supabase | ✅ セットアップ済み・動作確認済み |
+| Vercel デプロイ | ✅ **完了（GitHub連携の自動デプロイ設定済み）** |
+| 優先度機能（急ぎ度） | 🔲 未実装・検討中（FEEDBACK.md参照） |
 
 ---
 
 ## 技術構成
 
-- **フレームワーク**: Next.js 16 + TypeScript + Tailwind CSS
-- **DB / Realtime**: Supabase
-- **デプロイ先**: Vercel
+- **フレームワーク**: Next.js + TypeScript + Tailwind CSS
+- **DB / Realtime**: Supabase（PostgreSQL + Realtime）
+- **デプロイ先**: Vercel（mainブランチにpushで自動デプロイ）
 - **認証**: なし（localStorageにmemberIdを保持、招待リンク方式）
 
 ---
@@ -31,7 +33,9 @@
 ```
 StockShare/
 ├── uchistock/        ← 旧Flaskアプリ（無視してOK）
-└── aru-nai/          ← 今回作ったNext.jsアプリ（こちらが本体）
+└── aru-nai/          ← 本体（Next.jsアプリ）
+    ├── public/
+    │   └── mockup-priority.html   ← 優先度機能UIモックアップ（Vercel経由でブラウザ確認可）
     ├── src/
     │   ├── types/index.ts
     │   ├── lib/supabase.ts
@@ -45,7 +49,9 @@ StockShare/
     │       ├── onboarding/invite/page.tsx  # 招待リンク画面
     │       ├── home/page.tsx               # メイン画面
     │       └── join/[token]/page.tsx       # 招待リンクから参加
-    └── supabase/schema.sql
+    ├── supabase/schema.sql
+    ├── HANDOVER.md    ← このファイル
+    └── FEEDBACK.md    ← ユーザーフィードバック記録
 ```
 
 ---
@@ -55,7 +61,6 @@ StockShare/
 - **URL**: `https://yjyfuyogggbeuaxesryn.supabase.co`
 - **プロジェクト名**: aru-nai（Supabaseダッシュボード上）
 - **スキーマ**: 適用済み（families / members / items テーブル、RLS・Realtime設定済み）
-- **Anon Key**: `.env.local.example` を参照（実際のキーはローカルの `.env.local` に記載）
 
 ### .env.local の内容（新デバイスでは手動で作成）
 
@@ -70,29 +75,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
 
 - **プロジェクト名**: stock-share
 - **スコープ**: `kikus-projects-414e71be`
-- **ブランチ**: `claude/uchistock-inventory-app-YWqKM`
+- **デプロイ方式**: GitHubのmainブランチにpush → 自動デプロイ
+- **Root Directory**: `aru-nai`
 
-### ⚠️ 未完了：デプロイ手順
-
-新しいデバイスでも、このデバイスでも、以下を `aru-nai/` ディレクトリで実行すればデプロイ完了：
-
-```bash
-# 1. Vercel CLIでログイン
-npx vercel login
-
-# 2. プロジェクトをリンク
-npx vercel link --scope kikus-projects-414e71be --yes
-
-# 3. 本番デプロイ
-npx vercel --prod --scope kikus-projects-414e71be
-```
-
-その後、Vercelダッシュボード → **Environment Variables** に以下を追加してリデプロイ：
-
-| キー | 値 |
-|------|----|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://yjyfuyogggbeuaxesryn.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | （上記の値） |
+> ⚠️ Vercel上の Environment Variables に上記Supabaseキーが設定済みであること。
+> 新デバイスからデプロイし直す場合は Vercel ダッシュボードで確認すること。
 
 ---
 
@@ -119,8 +106,17 @@ npm run dev
 - 削除
 - 招待リンク参加（/join/[token]）
 - 最終更新者・更新時間の表示
+- 家にないゾーン表示
+- 設定画面
+- 招待URL表示
 
-## 将来の追加候補（MVPには含まない）
+---
+
+## 次に実装したい機能
+
+- **優先度（急ぎ度）機能** → FEEDBACK.md #001 参照。UIの方向性は2案を検討中。
+
+## 将来の追加候補
 
 - カテゴリ分け
 - 通知機能
