@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>優先度機能 モックアップ</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  background: #f0f9f9;
+  min-height: 100vh;
+  padding: 28px 16px 60px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ヘッダー */
+.page-title {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: #0e7490;
+  margin-bottom: 6px;
+  letter-spacing: -.01em;
+}
+.page-sub {
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 28px;
+}
+
+/* タブ */
+.tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.tab {
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 2px solid #e2e8f0;
+  cursor: pointer;
+  background: white;
+  color: #94a3b8;
+  transition: all .15s;
+}
+.tab.active {
+  background: #0891b2;
+  color: white;
+  border-color: #0891b2;
+}
+
+/* 画面切り替え */
+.screens { display: none; }
+.screens.active { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+/* 説明カード */
+.desc {
+  width: 100%;
+  max-width: 375px;
+  background: white;
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.75;
+  border-left: 4px solid #0891b2;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.desc strong { color: #0e7490; font-weight: 700; }
+.pro { color: #16a34a; font-weight: 600; }
+.con { color: #dc2626; font-weight: 600; }
+
+/* 電話フレーム */
+.phone {
+  width: 375px;
+  min-height: 700px;
+  background: #f8fafc;
+  border-radius: 44px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 10px #1e293b,
+    0 0 0 12px #334155,
+    0 24px 60px rgba(0,0,0,.35);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ノッチ */
+.notch {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 120px; height: 30px;
+  background: #1e293b;
+  border-radius: 0 0 20px 20px;
+  z-index: 20;
+}
+
+/* ステータスバー */
+.statusbar {
+  background: white;
+  padding: 42px 24px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+}
+.statusbar-time { font-size: 15px; font-weight: 800; }
+
+/* アプリヘッダー */
+.app-header {
+  background: white;
+  padding: 10px 20px 14px;
+}
+.app-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.header-logo {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0e7490;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.header-logo span { font-size: 18px; }
+.last-updated { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+.settings-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  border: none;
+  font-size: 15px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ナビゲーション風の仕切り */
+.header-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 0;
+}
+
+/* メイン */
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 16px 110px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* セクション */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #0e7490;
+}
+.section-count {
+  background: #cffafe;
+  color: #0891b2;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+/* ─── アイテムカード（現在スタイル） ─── */
+.item-card {
+  background: white;
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: transform .1s;
+  cursor: pointer;
+}
+.item-card:active { transform: scale(.98); }
+.item-info { flex: 1; min-width: 0; }
+.item-name { font-size: 15px; font-weight: 600; color: #1e293b; }
+.item-time { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+/* ある / 買い トグルボタン */
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.toggle-btn {
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all .12s;
+}
+.toggle-btn.aru {
+  background: #dcfce7;
+  color: #16a34a;
+}
+.toggle-btn.aru.active {
+  background: #22c55e;
+  color: white;
+}
+.toggle-btn.kai {
+  background: #fee2e2;
+  color: #dc2626;
+}
+.toggle-btn.kai.active {
+  background: #ef4444;
+  color: white;
+}
+
+/* ─── 優先度バッジ（案②） ─── */
+.priority-pill {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all .12s;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.priority-pill:active { transform: scale(.92); }
+.pp-urgent  { background: #fef2f2; color: #ef4444; }
+.pp-soon    { background: #fffbeb; color: #d97706; }
+.pp-anytime { background: #f1f5f9; color: #94a3b8; }
+
+/* ─── 左ライン（案④） ─── */
+.line-urgent  { border-left: 4px solid #ef4444; }
+.line-soon    { border-left: 4px solid #f59e0b; }
+.line-anytime { border-left: 4px solid #cbd5e1; }
+
+.priority-text-urgent  { color: #ef4444; }
+.priority-text-soon    { color: #d97706; }
+.priority-text-anytime { color: #94a3b8; }
+
+/* FAB */
+.fab-wrap {
+  position: absolute;
+  bottom: 28px;
+  left: 0; right: 0;
+  display: flex;
+  justify-content: center;
+}
+.fab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  color: white;
+  border: none;
+  border-radius: 9999px;
+  padding: 14px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  box-shadow: 0 4px 20px rgba(8,145,178,.4);
+  cursor: pointer;
+  transition: transform .1s;
+}
+.fab:active { transform: scale(.96); }
+
+/* ─── ボトムシート ─── */
+.overlay {
+  position: absolute; inset: 0;
+  background: rgba(15,23,42,.5);
+  display: flex; align-items: flex-end;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s;
+  border-radius: 44px;
+  overflow: hidden;
+  z-index: 30;
+}
+.overlay.show { opacity: 1; pointer-events: all; }
+.sheet {
+  width: 100%;
+  background: white;
+  border-radius: 28px 28px 0 0;
+  padding: 16px 20px 44px;
+  transform: translateY(100%);
+  transition: transform .28s cubic-bezier(.32,0,.3,1);
+}
+.overlay.show .sheet { transform: translateY(0); }
+.sheet-handle {
+  width: 36px; height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  margin: 0 auto 20px;
+}
+.sheet-title {
+  font-size: 13px; font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+.sheet-opts { display: flex; flex-direction: column; gap: 8px; }
+.sheet-opt {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 2px solid transparent;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all .12s;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
+.sheet-opt:active { transform: scale(.97); }
+.sheet-opt.so-urgent  { border-color: #fecaca; background: #fef2f2; }
+.sheet-opt.so-soon    { border-color: #fde68a; background: #fffbeb; }
+.sheet-opt.so-anytime { border-color: #e2e8f0; background: #f8fafc; }
+.sheet-opt-icon { font-size: 22px; }
+.sheet-opt-name { font-size: 15px; font-weight: 700; color: #1e293b; }
+.sheet-opt-desc { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+/* ─── 追加モーダル ─── */
+.modal-overlay {
+  position: absolute; inset: 0;
+  background: rgba(15,23,42,.5);
+  display: flex; align-items: flex-end;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s;
+  border-radius: 44px;
+  overflow: hidden;
+  z-index: 30;
+}
+.modal-overlay.show { opacity: 1; pointer-events: all; }
+.modal {
+  width: 100%;
+  background: white;
+  border-radius: 28px 28px 0 0;
+  padding: 16px 20px 44px;
+  transform: translateY(100%);
+  transition: transform .28s cubic-bezier(.32,0,.3,1);
+}
+.modal-overlay.show .modal { transform: translateY(0); }
+.modal-title {
+  font-size: 17px; font-weight: 800;
+  color: #0e7490;
+  text-align: center;
+  margin-bottom: 20px;
+}
+.modal-input {
+  width: 100%;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 13px 16px;
+  font-size: 15px;
+  font-family: inherit;
+  color: #1e293b;
+  outline: none;
+  background: #f8fafc;
+  margin-bottom: 18px;
+}
+.modal-input:focus { border-color: #0891b2; background: white; }
+.modal-section-label {
+  font-size: 12px; font-weight: 700;
+  color: #64748b;
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.p-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.p-opt {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 2px solid #e2e8f0;
+  cursor: pointer;
+  transition: all .12s;
+  background: white;
+}
+.p-opt.sel-urgent  { border-color: #ef4444; background: #fef2f2; }
+.p-opt.sel-soon    { border-color: #f59e0b; background: #fffbeb; }
+.p-opt.sel-anytime { border-color: #94a3b8; background: #f8fafc; }
+.p-opt-icon { font-size: 20px; }
+.p-opt-name { font-size: 14px; font-weight: 700; color: #1e293b; }
+.p-opt-desc { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+.modal-add-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  color: white;
+  border: none;
+  border-radius: 14px;
+  padding: 15px;
+  font-size: 15px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .12s;
+  box-shadow: 0 4px 14px rgba(8,145,178,.3);
+}
+.modal-add-btn:active { transform: scale(.97); }
+
+.hint {
+  text-align: center;
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+</style>
+</head>
+<body>
+
+<div class="page-title">ある・ないアプリ</div>
+<div class="page-sub">優先度機能 UIモックアップ</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('current', this)">現在</button>
+  <button class="tab" onclick="showTab('badge', this)">案② バッジタップ</button>
+  <button class="tab" onclick="showTab('form', this)">案④ 追加時に選ぶ</button>
+</div>
+
+<!-- ===== 現在 ===== -->
+<div class="screens active" id="tab-current">
+  <div class="desc">
+    <strong>現在の状態（参考）</strong><br>
+    タップで「ある ↔ 買い」を切り替えるだけ。シンプルだが急ぎ度の区別ができない。
+  </div>
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="statusbar">
+      <span class="statusbar-time">9:41</span>
+      <div>📶 🔋</div>
+    </div>
+    <div class="app-header">
+      <div class="app-header-row">
+        <div class="header-logo"><span>🏠</span>田中家</div>
+        <button class="settings-btn">⚙️</button>
+      </div>
+      <div class="last-updated">お母さんが3分前に更新</div>
+    </div>
+    <div class="header-divider"></div>
+    <div class="app-main">
+      <section>
+        <div class="section-header">
+          <div class="section-label">🛒 買うもの</div>
+          <span class="section-count">3点</span>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">ネギ</div><div class="item-time">お母さん · 昨日</div></div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru">ある</button>
+            <button class="toggle-btn kai active">買い</button>
+          </div>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">てんさい糖</div><div class="item-time">お母さん · 2日前</div></div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru">ある</button>
+            <button class="toggle-btn kai active">買い</button>
+          </div>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">塩</div><div class="item-time">お父さん · 3日前</div></div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru">ある</button>
+            <button class="toggle-btn kai active">買い</button>
+          </div>
+        </div>
+      </section>
+      <section>
+        <div class="section-header">
+          <div class="section-label">✅ あるもの</div>
+          <span class="section-count">2点</span>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">牛乳</div><div class="item-time">お父さん · 1時間前</div></div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru active">ある</button>
+            <button class="toggle-btn kai">買い</button>
+          </div>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">卵</div><div class="item-time">お母さん · 5分前</div></div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru active">ある</button>
+            <button class="toggle-btn kai">買い</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="fab-wrap">
+      <button class="fab">＋ 追加する</button>
+    </div>
+  </div>
+  <div class="hint">変更なし（参考用）</div>
+</div>
+
+<!-- ===== 案② バッジタップ ===== -->
+<div class="screens" id="tab-badge">
+  <div class="desc">
+    <strong>案② バッジタップ</strong><br>
+    カード右側の優先度バッジをタップするたびに切り替わる。<br>
+    <span class="pro">◎ 一覧で優先度が一目でわかる</span><br>
+    <span class="pro">◎ ワンタップで変更できる</span><br>
+    <span class="con">△ カードの情報が少し増える</span>
+  </div>
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="statusbar">
+      <span class="statusbar-time">9:41</span>
+      <div>📶 🔋</div>
+    </div>
+    <div class="app-header">
+      <div class="app-header-row">
+        <div class="header-logo"><span>🏠</span>田中家</div>
+        <button class="settings-btn">⚙️</button>
+      </div>
+      <div class="last-updated">お母さんが3分前に更新</div>
+    </div>
+    <div class="header-divider"></div>
+    <div class="app-main">
+      <section>
+        <div class="section-header">
+          <div class="section-label">🛒 買うもの</div>
+          <span class="section-count">3点</span>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">ネギ</div><div class="item-time">お母さん · 昨日</div></div>
+          <button class="priority-pill pp-urgent" onclick="cyclePriority(this)">🔴 至急</button>
+          <div class="toggle-group">
+            <button class="toggle-btn aru">ある</button>
+            <button class="toggle-btn kai active">買い</button>
+          </div>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">てんさい糖</div><div class="item-time">お母さん · 2日前</div></div>
+          <button class="priority-pill pp-soon" onclick="cyclePriority(this)">🟡 近日中</button>
+          <div class="toggle-group">
+            <button class="toggle-btn aru">ある</button>
+            <button class="toggle-btn kai active">買い</button>
+          </div>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">塩</div><div class="item-time">お父さん · 3日前</div></div>
+          <button class="priority-pill pp-anytime" onclick="cyclePriority(this)">⚪️ ついでに</button>
+          <div class="toggle-group">
+            <button class="toggle-btn aru">ある</button>
+            <button class="toggle-btn kai active">買い</button>
+          </div>
+        </div>
+      </section>
+      <section>
+        <div class="section-header">
+          <div class="section-label">✅ あるもの</div>
+          <span class="section-count">2点</span>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">牛乳</div><div class="item-time">お父さん · 1時間前</div></div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru active">ある</button>
+            <button class="toggle-btn kai">買い</button>
+          </div>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">卵</div><div class="item-time">お母さん · 5分前</div></div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru active">ある</button>
+            <button class="toggle-btn kai">買い</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="fab-wrap">
+      <button class="fab">＋ 追加する</button>
+    </div>
+  </div>
+  <div class="hint">🔴🟡⚪️ のバッジをタップして切り替えてみてください</div>
+</div>
+
+<!-- ===== 案④ 追加時に選ぶ ===== -->
+<div class="screens" id="tab-form">
+  <div class="desc">
+    <strong>案④ 追加時に優先度を選ぶ</strong><br>
+    追加モーダルで最初から優先度を設定。カード左端の色ラインで表示。変更は長押し。<br>
+    <span class="pro">◎ 追加時に自然に設定できる</span><br>
+    <span class="pro">◎ 普段の操作はシンプルなまま</span><br>
+    <span class="con">△ 変更したい時は長押しが必要（わかりにくい）</span>
+  </div>
+  <div class="phone" id="phone-form">
+    <div class="notch"></div>
+    <div class="statusbar">
+      <span class="statusbar-time">9:41</span>
+      <div>📶 🔋</div>
+    </div>
+    <div class="app-header">
+      <div class="app-header-row">
+        <div class="header-logo"><span>🏠</span>田中家</div>
+        <button class="settings-btn">⚙️</button>
+      </div>
+      <div class="last-updated">お母さんが3分前に更新</div>
+    </div>
+    <div class="header-divider"></div>
+    <div class="app-main">
+      <section>
+        <div class="section-header">
+          <div class="section-label">🛒 買うもの</div>
+          <span class="section-count">3点</span>
+        </div>
+        <div class="item-card line-urgent" id="card1" oncontextmenu="openSheet(event)">
+          <div class="item-info">
+            <div class="item-name">ネギ</div>
+            <div class="item-time priority-text-urgent">🔴 至急 · お母さん · 昨日</div>
+          </div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru">ある</button>
+            <button class="toggle-btn kai active">買い</button>
+          </div>
+        </div>
+        <div class="item-card line-soon" oncontextmenu="openSheet(event)">
+          <div class="item-info">
+            <div class="item-name">てんさい糖</div>
+            <div class="item-time priority-text-soon">🟡 近日中 · お母さん · 2日前</div>
+          </div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru">ある</button>
+            <button class="toggle-btn kai active">買い</button>
+          </div>
+        </div>
+        <div class="item-card line-anytime" oncontextmenu="openSheet(event)">
+          <div class="item-info">
+            <div class="item-name">塩</div>
+            <div class="item-time priority-text-anytime">⚪️ ついでに · お父さん · 3日前</div>
+          </div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru">ある</button>
+            <button class="toggle-btn kai active">買い</button>
+          </div>
+        </div>
+      </section>
+      <section>
+        <div class="section-header">
+          <div class="section-label">✅ あるもの</div>
+          <span class="section-count">2点</span>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">牛乳</div><div class="item-time">お父さん · 1時間前</div></div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru active">ある</button>
+            <button class="toggle-btn kai">買い</button>
+          </div>
+        </div>
+        <div class="item-card">
+          <div class="item-info"><div class="item-name">卵</div><div class="item-time">お母さん · 5分前</div></div>
+          <div class="toggle-group">
+            <button class="toggle-btn aru active">ある</button>
+            <button class="toggle-btn kai">買い</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="fab-wrap">
+      <button class="fab" onclick="openModal()">＋ 追加する</button>
+    </div>
+
+    <!-- 長押し変更シート -->
+    <div class="overlay" id="sheet" onclick="closeSheet()">
+      <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">急ぎ度を変更</div>
+        <div class="sheet-opts">
+          <button class="sheet-opt so-urgent" onclick="closeSheet()">
+            <span class="sheet-opt-icon">🔴</span>
+            <div><div class="sheet-opt-name">至急</div><div class="sheet-opt-desc">できるだけ早く買ってきて</div></div>
+          </button>
+          <button class="sheet-opt so-soon" onclick="closeSheet()">
+            <span class="sheet-opt-icon">🟡</span>
+            <div><div class="sheet-opt-name">近日中に</div><div class="sheet-opt-desc">そのうち買ってくれればOK</div></div>
+          </button>
+          <button class="sheet-opt so-anytime" onclick="closeSheet()">
+            <span class="sheet-opt-icon">⚪️</span>
+            <div><div class="sheet-opt-name">ついでの時</div><div class="sheet-opt-desc">安かったら・通りがかったら</div></div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 追加モーダル -->
+    <div class="modal-overlay" id="modal" onclick="closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="modal-title">アイテムを追加</div>
+        <input class="modal-input" type="text" placeholder="例：ネギ、牛乳、シャンプー…">
+        <div class="modal-section-label">🚦 急ぎ度</div>
+        <div class="p-options">
+          <div class="p-opt sel-urgent" onclick="selectP(this, 'urgent')">
+            <span class="p-opt-icon">🔴</span>
+            <div><div class="p-opt-name">至急</div><div class="p-opt-desc">できるだけ早く買ってきて</div></div>
+          </div>
+          <div class="p-opt" onclick="selectP(this, 'soon')">
+            <span class="p-opt-icon">🟡</span>
+            <div><div class="p-opt-name">近日中に</div><div class="p-opt-desc">そのうち買ってくれればOK</div></div>
+          </div>
+          <div class="p-opt" onclick="selectP(this, 'anytime')">
+            <span class="p-opt-icon">⚪️</span>
+            <div><div class="p-opt-name">ついでの時</div><div class="p-opt-desc">安かったら・通りがかったら</div></div>
+          </div>
+        </div>
+        <button class="modal-add-btn" onclick="closeModal()">追加する</button>
+      </div>
+    </div>
+  </div>
+  <div class="hint">「追加する」ボタンでモーダル表示 ／ PCは右クリック・スマホは長押しで変更シート</div>
+</div>
+
+<script>
+function showTab(id, btn) {
+  document.querySelectorAll('.screens').forEach(s => s.classList.remove('active'))
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+  document.getElementById('tab-' + id).classList.add('active')
+  btn.classList.add('active')
+}
+
+// 案② バッジサイクル
+const PRIORITIES = [
+  { cls: 'pp-urgent',  label: '🔴 至急' },
+  { cls: 'pp-soon',    label: '🟡 近日中' },
+  { cls: 'pp-anytime', label: '⚪️ ついでに' },
+]
+function cyclePriority(btn) {
+  const cur = PRIORITIES.findIndex(p => btn.classList.contains(p.cls))
+  const next = PRIORITIES[(cur + 1) % PRIORITIES.length]
+  PRIORITIES.forEach(p => btn.classList.remove(p.cls))
+  btn.classList.add(next.cls)
+  btn.textContent = next.label
+}
+
+// 案④ モーダル
+function openModal() { document.getElementById('modal').classList.add('show') }
+function closeModal() { document.getElementById('modal').classList.remove('show') }
+function selectP(el, type) {
+  document.querySelectorAll('#modal .p-opt').forEach(o => {
+    o.classList.remove('sel-urgent', 'sel-soon', 'sel-anytime')
+  })
+  el.classList.add('sel-' + type)
+}
+
+// 案④ 長押しシート
+function openSheet(e) { e && e.preventDefault(); document.getElementById('sheet').classList.add('show') }
+function closeSheet() { document.getElementById('sheet').classList.remove('show') }
+
+let holdTimer
+document.querySelectorAll('#phone-form .item-card').forEach(card => {
+  card.addEventListener('touchstart', () => { holdTimer = setTimeout(openSheet, 600) }, { passive: true })
+  card.addEventListener('touchend',   () => clearTimeout(holdTimer))
+  card.addEventListener('touchmove',  () => clearTimeout(holdTimer))
+})
+</script>
+</body>
+</html>
