@@ -12,8 +12,9 @@
 | 項目 | 状態 |
 |------|------|
 | MVPコード | ✅ 完成・GitHub プッシュ済み |
-| Supabase | ✅ セットアップ済み・ローカルで動作確認済み |
-| Vercel デプロイ | ❌ **未完了（ここが次のタスク）** |
+| Supabase | ✅ セットアップ済み・動作確認済み |
+| Vercel デプロイ | ✅ 完了（aru-nai-iota.vercel.app） |
+| GitHub 自動デプロイ | ⚠️ 要確認（CLIデプロイは動作済み）|
 
 ---
 
@@ -21,7 +22,7 @@
 
 - **フレームワーク**: Next.js 16 + TypeScript + Tailwind CSS
 - **DB / Realtime**: Supabase
-- **デプロイ先**: Vercel
+- **デプロイ先**: Vercel（aru-nai-iota.vercel.app）
 - **認証**: なし（localStorageにmemberIdを保持、招待リンク方式）
 
 ---
@@ -31,33 +32,62 @@
 ```
 StockShare/
 ├── uchistock/        ← 旧Flaskアプリ（無視してOK）
-└── aru-nai/          ← 今回作ったNext.jsアプリ（こちらが本体）
+└── aru-nai/          ← Next.jsアプリ（本体）
     ├── src/
-    │   ├── types/index.ts
+    │   ├── types/index.ts              # ItemStatus('home'|'buy'|'none'), Priority('urgent'|'soon'|'anytime')
     │   ├── lib/supabase.ts
     │   ├── lib/storage.ts
-    │   ├── components/ItemCard.tsx
+    │   ├── lib/itemColor.ts            # アイテム名からイニシャル円の色を決定
+    │   ├── components/ItemCard.tsx     # 左イニシャル円・右チェブロン・優先度バッジ
+    │   ├── components/ItemDetailModal.tsx  # タップで開く詳細モーダル
     │   ├── components/AddItemModal.tsx
     │   └── app/
     │       ├── page.tsx                    # / → 自動リダイレクト
-    │       ├── onboarding/family/page.tsx  # 家族名入力
-    │       ├── onboarding/member/page.tsx  # メンバー名入力 + DB作成
-    │       ├── onboarding/invite/page.tsx  # 招待リンク画面
     │       ├── home/page.tsx               # メイン画面
-    │       └── join/[token]/page.tsx       # 招待リンクから参加
+    │       ├── members/page.tsx            # メンバー一覧
+    │       ├── settings/page.tsx           # 設定・招待URL表示
+    │       ├── onboarding/family/page.tsx
+    │       ├── onboarding/member/page.tsx
+    │       ├── onboarding/invite/page.tsx
+    │       └── join/[token]/page.tsx
     └── supabase/schema.sql
 ```
+
+---
+
+## 実装済み機能
+
+- オンボーディング（家族名 → メンバー名 → Supabase作成 → 招待画面）
+- ホーム画面（買う・家にある・家にない の3セクション）
+- セクションヘッダーに背景色（買う:ピンク、家にある:グリーン、家にない:グレー）
+- アイテムカード（左イニシャル円・名前・更新者時刻・右チェブロン）
+- カードタップ → 詳細モーダル（家にある/買う/家にない/削除する）
+- 優先度バッジ（買うゾーンのみ）：🔴至急/🟡近日中/⚪️ついでに をタップで切り替え
+- 買うゾーンを優先度順にソート（至急→近日中→ついでに）
+- 削除の代わりに「家にない」へアーカイブ、家にないからタップで「買う」に復元
+- リアルタイム同期（Supabase Realtime）
+- 設定画面（招待URLコピー）
+- メンバーページ（家族メンバー一覧）
+- ボトムナビ（ホーム | メンバー）
+- 招待リンク参加（/join/[token]）
 
 ---
 
 ## Supabase 情報
 
 - **URL**: `https://yjyfuyogggbeuaxesryn.supabase.co`
-- **プロジェクト名**: aru-nai（Supabaseダッシュボード上）
-- **スキーマ**: 適用済み（families / members / items テーブル、RLS・Realtime設定済み）
-- **Anon Key**: `.env.local.example` を参照（実際のキーはローカルの `.env.local` に記載）
+- **プロジェクト名**: aru-nai
+- **スキーマ**: 適用済み
 
-### .env.local の内容（新デバイスでは手動で作成）
+### テーブル構成
+
+```sql
+-- items テーブルの主要カラム
+status   text  CHECK (status IN ('home', 'buy', 'none'))     DEFAULT 'buy'
+priority text  CHECK (priority IN ('urgent', 'soon', 'anytime')) DEFAULT 'anytime'
+```
+
+### .env.local の内容
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://yjyfuyogggbeuaxesryn.supabase.co
@@ -68,31 +98,22 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
 
 ## Vercel 情報
 
-- **プロジェクト名**: stock-share
+- **プロジェクト名**: aru-nai
+- **本番URL**: https://aru-nai-iota.vercel.app
 - **スコープ**: `kikus-projects-414e71be`
-- **ブランチ**: `claude/uchistock-inventory-app-YWqKM`
+- **Root Directory**: `aru-nai`（Vercel Project Settings → General で設定済み）
+- **GitHub連携**: kiku0409/StockShare に接続済み
+- **Ignored Build Step**: `claude/uchistock-inventory-app-YWqKM` ブランチを除外設定済み
 
-### ⚠️ 未完了：デプロイ手順
-
-新しいデバイスでも、このデバイスでも、以下を `aru-nai/` ディレクトリで実行すればデプロイ完了：
+### CLIデプロイ方法（GitHub自動デプロイが動かない場合）
 
 ```bash
-# 1. Vercel CLIでログイン
-npx vercel login
-
-# 2. プロジェクトをリンク
-npx vercel link --scope kikus-projects-414e71be --yes
-
-# 3. 本番デプロイ
+# リポジトリルート（StockShare/）から実行すること
+cd /path/to/StockShare
 npx vercel --prod --scope kikus-projects-414e71be
 ```
 
-その後、Vercelダッシュボード → **Environment Variables** に以下を追加してリデプロイ：
-
-| キー | 値 |
-|------|----|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://yjyfuyogggbeuaxesryn.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | （上記の値） |
+⚠️ `aru-nai/` の中から実行するとパスが二重になってエラーになる
 
 ---
 
@@ -110,18 +131,9 @@ npm run dev
 
 ---
 
-## 実装済み機能
+## 今後の追加候補
 
-- オンボーディング（家族名 → メンバー名 → Supabaseにレコード作成 → 招待画面）
-- ホーム画面（「買う」「家にある」の2セクション、Realtimeリアルタイム同期）
-- アイテム追加（「🏠家にある」「🛒買う」の2択ボタンで初期状態を選択）
-- ワンタップ状態切り替え
-- 削除
-- 招待リンク参加（/join/[token]）
-- 最終更新者・更新時間の表示
-
-## 将来の追加候補（MVPには含まない）
-
+- 優先度機能の案④（追加時に選ぶ・左ラインで表示）との比較検討
 - カテゴリ分け
 - 通知機能
 - よく使うセット登録
