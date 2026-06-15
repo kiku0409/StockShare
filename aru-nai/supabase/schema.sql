@@ -20,6 +20,7 @@ create table if not exists items (
   family_id uuid not null references families(id) on delete cascade,
   name text not null,
   status text not null check (status in ('home', 'buy', 'none')) default 'buy',
+  priority text not null check (priority in ('urgent', 'soon', 'anytime')) default 'anytime',
   updated_by_member_id uuid references members(id) on delete set null,
   updated_at timestamptz not null default now()
 );

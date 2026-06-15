@@ -1,6 +1,7 @@
 'use client'
 
 import type { Item } from '@/types'
+import { getItemColor } from '@/lib/itemColor'
 
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -14,39 +15,52 @@ function formatRelativeTime(dateStr: string): string {
   return `${days}日前`
 }
 
-interface Props {
-  item: Item
-  onToggle: (item: Item) => void
-  onArchive: (item: Item) => void
-  onDelete: (item: Item) => void
+const PRIORITY_STYLE = {
+  urgent:  { pill: 'bg-red-50 text-red-500',    label: '🔴 至急' },
+  soon:    { pill: 'bg-amber-50 text-amber-600', label: '🟡 近日中' },
+  anytime: { pill: 'bg-gray-100 text-gray-400',  label: '⚪️ ついでに' },
 }
 
-export default function ItemCard({ item, onToggle, onArchive, onDelete }: Props) {
+interface Props {
+  item: Item
+  onClick: (item: Item) => void
+  onPriorityChange?: (item: Item) => void
+}
+
+export default function ItemCard({ item, onClick, onPriorityChange }: Props) {
   const updaterName = item.members?.display_name ?? '不明'
   const timeAgo = formatRelativeTime(item.updated_at)
+  const colorClass = getItemColor(item.name)
   const isNone = item.status === 'none'
+  const priority = PRIORITY_STYLE[item.priority ?? 'anytime']
 
   return (
-    <div className={`flex items-center gap-3 bg-white rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition select-none ${isNone ? 'opacity-50' : ''}`}>
-      <button
-        onClick={() => onToggle(item)}
-        className="flex-1 flex flex-col gap-0.5 text-left min-w-0"
-      >
-        <span className={`text-base font-medium truncate ${isNone ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+    <button
+      onClick={() => onClick(item)}
+      className={`flex items-center gap-3 bg-white rounded-2xl px-4 py-3 shadow-sm w-full text-left active:scale-[0.98] transition ${isNone ? 'opacity-50' : ''}`}
+    >
+      <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-base font-bold ${colorClass}`}>
+        {item.name[0] ?? '？'}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold truncate ${isNone ? 'line-through text-gray-400' : 'text-gray-900'}`}>
           {item.name}
-        </span>
-        <span className="text-xs text-gray-400">
-          {isNone ? 'タップで「買う」に戻す' : `${updaterName}が${timeAgo}に更新`}
-        </span>
-      </button>
+        </p>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {isNone ? '家にない' : `${updaterName}が${timeAgo}に更新`}
+        </p>
+      </div>
 
-      <button
-        onClick={() => isNone ? onDelete(item) : onArchive(item)}
-        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition"
-        aria-label={isNone ? '完全に削除' : '家にないへ移動'}
-      >
-        ×
-      </button>
-    </div>
+      {item.status === 'buy' && onPriorityChange && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onPriorityChange(item) }}
+          className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold transition active:scale-90 ${priority.pill}`}
+        >
+          {priority.label}
+        </button>
+      )}
+
+      <span className="shrink-0 text-gray-300 text-lg">›</span>
+    </button>
   )
 }

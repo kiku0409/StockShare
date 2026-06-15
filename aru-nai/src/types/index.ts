@@ -1,4 +1,5 @@
 export type ItemStatus = 'home' | 'buy' | 'none'
+export type Priority = 'urgent' | 'soon' | 'anytime'
 
 export interface Family {
   id: string
@@ -19,6 +20,7 @@ export interface Item {
   family_id: string
   name: string
   status: ItemStatus
+  priority: Priority
   updated_by_member_id: string | null
   updated_at: string
   members?: Member
