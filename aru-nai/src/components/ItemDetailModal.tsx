@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import type { Item, ItemStatus } from '@/types'
 import { getItemColor } from '@/lib/itemColor'
+import { formatRelativeTime } from '@/lib/time'
 
 interface Props {
   item: Item
@@ -13,6 +15,7 @@ interface Props {
 export default function ItemDetailModal({ item, onStatusChange, onDelete, onClose }: Props) {
   const colorClass = getItemColor(item.name)
   const updaterName = item.members?.display_name ?? '不明'
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const handleStatus = (status: ItemStatus) => {
     if (item.status !== status) onStatusChange(item, status)
@@ -34,7 +37,9 @@ export default function ItemDetailModal({ item, onStatusChange, onDelete, onClos
           {item.name[0] ?? '？'}
         </div>
         <h2 className="text-xl font-bold text-center text-gray-900 mb-1">{item.name}</h2>
-        <p className="text-xs text-center text-gray-400 mb-6">最終更新：{updaterName}が更新</p>
+        <p className="text-xs text-center text-gray-400 mb-6">
+          {updaterName}が{formatRelativeTime(item.updated_at)}に更新
+        </p>
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <button
@@ -72,12 +77,29 @@ export default function ItemDetailModal({ item, onStatusChange, onDelete, onClos
           📦 家にない
         </button>
 
-        <button
-          onClick={() => { onDelete(item); onClose() }}
-          className="w-full rounded-2xl border-2 border-red-100 py-3 text-sm font-semibold text-red-400 transition active:scale-95"
-        >
-          削除する
-        </button>
+        {confirmDelete ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => { onDelete(item); onClose() }}
+              className="flex-1 rounded-2xl border-2 border-red-400 bg-red-500 py-3 text-sm font-semibold text-white transition active:scale-95"
+            >
+              本当に削除する
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="flex-1 rounded-2xl border-2 border-gray-100 bg-gray-50 py-3 text-sm font-semibold text-gray-500 transition active:scale-95"
+            >
+              戻る
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="w-full rounded-2xl border-2 border-red-100 py-3 text-sm font-semibold text-red-400 transition active:scale-95"
+          >
+            削除する
+          </button>
+        )}
       </div>
     </div>
   )

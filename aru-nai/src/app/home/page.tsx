@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { storage } from '@/lib/storage'
+import { formatRelativeTime } from '@/lib/time'
 import type { Item, ItemStatus, Priority } from '@/types'
 import ItemCard from '@/components/ItemCard'
 import AddItemModal from '@/components/AddItemModal'
@@ -18,19 +19,22 @@ export default function HomePage() {
   const [showAdd, setShowAdd] = useState(false)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [loading, setLoading] = useState(true)
+  const [priorityFilter, setPriorityFilter] = useState<Set<'urgent' | 'soon' | 'anytime'>>(new Set())
 
-  const familyId = typeof window !== 'undefined' ? storage.getFamilyId() : null
-  const memberId = typeof window !== 'undefined' ? storage.getMemberId() : null
-  const familyName = typeof window !== 'undefined' ? storage.getFamilyName() : ''
-  const memberName = typeof window !== 'undefined' ? storage.getMemberName() : ''
+  // localStorage は初回レンダリング時のみ読む
+  const familyId = useRef(storage.getFamilyId()).current
+  const memberId = useRef(storage.getMemberId()).current
+  const familyName = useRef(storage.getFamilyName()).current ?? ''
+  const memberName = useRef(storage.getMemberName()).current ?? ''
 
   const fetchItems = useCallback(async () => {
     if (!familyId) return
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('items')
       .select('*, members(display_name)')
       .eq('family_id', familyId)
       .order('updated_at', { ascending: false })
+    if (error) { console.error('fetchItems failed:', error); return }
     setItems((data as Item[]) ?? [])
     setLoading(false)
   }, [familyId])
@@ -43,24 +47,55 @@ export default function HomePage() {
     fetchItems()
   }, [fetchItems, router])
 
+  // Realtime: 全件再取得ではなく差分更新（#3）
   useEffect(() => {
     if (!familyId) return
     const channel = supabase
       .channel(`items:${familyId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `family_id=eq.${familyId}` }, fetchItems)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'items', filter: `family_id=eq.${familyId}` },
+        async (payload) => {
+          if (payload.eventType === 'DELETE') {
+            setItems((prev) => prev.filter((i) => i.id !== (payload.old as { id: string }).id))
+          } else if (payload.eventType === 'INSERT') {
+            const { data } = await supabase
+              .from('items')
+              .select('*, members(display_name)')
+              .eq('id', (payload.new as { id: string }).id)
+              .single()
+            if (data) setItems((prev) => [data as Item, ...prev.filter((i) => i.id !== data.id)])
+          } else if (payload.eventType === 'UPDATE') {
+            setItems((prev) =>
+              prev.map((i) =>
+                i.id === (payload.new as { id: string }).id
+                  ? { ...i, ...(payload.new as Partial<Item>) }
+                  : i
+              )
+            )
+          }
+        }
+      )
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [familyId, fetchItems])
+  }, [familyId])
 
   const handleStatusChange = async (item: Item, newStatus: ItemStatus) => {
-    await supabase
-      .from('items')
-      .update({ status: newStatus, updated_by_member_id: memberId, updated_at: new Date().toISOString() })
-      .eq('id', item.id)
+    const now = new Date().toISOString()
+    // ステータス変更時に priority をリセット（#6: buy→home で在庫レベルが誤引き継ぎされるのを防ぐ）
+    const updates = {
+      status: newStatus,
+      priority: 'anytime' as Priority,
+      updated_by_member_id: memberId,
+      updated_at: now,
+    }
+    const { error } = await supabase.from('items').update(updates).eq('id', item.id)
+    if (error) { console.error('handleStatusChange failed:', error); return }
     setItems((prev) =>
-      prev.map((i) => i.id === item.id
-        ? { ...i, status: newStatus, updated_at: new Date().toISOString(), members: { id: memberId!, family_id: familyId!, display_name: memberName!, created_at: '' } }
-        : i
+      prev.map((i) =>
+        i.id === item.id
+          ? { ...i, ...updates, members: { display_name: memberName } }
+          : i
       )
     )
   }
@@ -68,21 +103,36 @@ export default function HomePage() {
   const handlePriorityChange = async (item: Item) => {
     const current = item.priority ?? 'anytime'
     const next = PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(current) + 1) % PRIORITY_CYCLE.length]
-    await supabase.from('items').update({ priority: next }).eq('id', item.id)
+    const { error } = await supabase.from('items').update({ priority: next }).eq('id', item.id)
+    if (error) { console.error('handlePriorityChange failed:', error); return }
     setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, priority: next } : i))
   }
 
+  const handleStockChange = async (item: Item) => {
+    const next: Priority = (item.priority ?? 'anytime') === 'anytime' ? 'urgent' : 'anytime'
+    const { error } = await supabase.from('items').update({ priority: next }).eq('id', item.id)
+    if (error) { console.error('handleStockChange failed:', error); return }
+    setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, priority: next } : i))
+  }
+
+  const handleStatusToggle = async (item: Item) => {
+    const newStatus: ItemStatus = item.status === 'buy' ? 'home' : 'buy'
+    await handleStatusChange(item, newStatus)
+  }
+
   const handleDelete = async (item: Item) => {
-    await supabase.from('items').delete().eq('id', item.id)
+    const { error } = await supabase.from('items').delete().eq('id', item.id)
+    if (error) { console.error('handleDelete failed:', error); return }
     setItems((prev) => prev.filter((i) => i.id !== item.id))
   }
 
   const handleAdd = async (name: string, status: ItemStatus) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('items')
       .insert({ family_id: familyId, name, status, updated_by_member_id: memberId })
       .select('*, members(display_name)')
       .single()
+    if (error) { console.error('handleAdd failed:', error); return }
     if (data) setItems((prev) => [data as Item, ...prev])
   }
 
@@ -92,15 +142,16 @@ export default function HomePage() {
   const homeItems = items.filter((i) => i.status === 'home')
   const noneItems = items.filter((i) => i.status === 'none')
 
+  // #7: 3つ全選択での自動リセットを廃止。明示的に「全て」ボタンでのみリセット
+  const displayedBuyItems = priorityFilter.size === 0
+    ? buyItems
+    : buyItems.filter((i) => priorityFilter.has(i.priority ?? 'anytime'))
+
   const activeItems = items.filter((i) => i.status !== 'none')
   const lastUpdated = activeItems[0]
     ? (() => {
-        const diff = Date.now() - new Date(activeItems[0].updated_at).getTime()
-        const min = Math.floor(diff / 60000)
         const name = activeItems[0].members?.display_name ?? ''
-        if (min < 1) return `${name}がたった今更新`
-        if (min < 60) return `${name}が${min}分前に更新`
-        return `${name}が${Math.floor(min / 60)}時間前に更新`
+        return `${name}が${formatRelativeTime(activeItems[0].updated_at)}に更新`
       })()
     : null
 
@@ -124,7 +175,7 @@ export default function HomePage() {
         )}
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 pb-36">
+      <main className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 pb-28">
         {loading ? (
           <div className="flex-1 flex items-center justify-center text-gray-400">読み込み中...</div>
         ) : (
@@ -139,12 +190,56 @@ export default function HomePage() {
                   {buyItems.length}
                 </span>
               </div>
+              {buyItems.length > 0 && (
+                <div className="flex gap-1.5 mb-2 overflow-x-auto pb-0.5">
+                  <button
+                    onClick={() => setPriorityFilter(new Set())}
+                    className={`shrink-0 text-xs px-3 py-1.5 rounded-full font-semibold transition active:scale-95 ${
+                      priorityFilter.size === 0
+                        ? 'bg-red-400 text-white'
+                        : 'bg-white text-gray-400 border border-gray-200'
+                    }`}
+                  >
+                    全て
+                  </button>
+                  {([
+                    { value: 'urgent',  label: '🔴 至急' },
+                    { value: 'soon',    label: '🟡 近日中' },
+                    { value: 'anytime', label: '⚪️ ついでに' },
+                  ] as const).map(({ value, label }) => (
+                    <button
+                      key={value}
+                      onClick={() => setPriorityFilter((prev) => {
+                        const next = new Set(prev)
+                        next.has(value) ? next.delete(value) : next.add(value)
+                        return next
+                      })}
+                      className={`shrink-0 text-xs px-3 py-1.5 rounded-full font-semibold transition active:scale-95 ${
+                        priorityFilter.has(value)
+                          ? 'bg-red-400 text-white'
+                          : 'bg-white text-gray-400 border border-gray-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex flex-col gap-2">
-                {buyItems.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-3">買うものはありません</p>
+                {displayedBuyItems.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-3">
+                    {priorityFilter.size > 0 ? 'このカテゴリのアイテムはありません' : '買うものはありません'}
+                  </p>
                 ) : (
-                  buyItems.map((item) => (
-                    <ItemCard key={item.id} item={item} onClick={setSelectedItem} onPriorityChange={handlePriorityChange} />
+                  displayedBuyItems.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      onToggle={handleStatusToggle}
+                      onDetail={setSelectedItem}
+                      onPriorityChange={handlePriorityChange}
+                      onDelete={handleDelete}
+                    />
                   ))
                 )}
               </div>
@@ -156,16 +251,29 @@ export default function HomePage() {
                   <span>🏠</span>
                   <h2 className="text-sm font-bold text-green-600">家にある</h2>
                 </div>
-                <span className="bg-green-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {homeItems.length}
-                </span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 text-xs text-gray-400">
+                    <span className="w-2 h-2 rounded-full bg-green-200 inline-block" />豊富
+                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block ml-1.5" />残り少ない
+                  </div>
+                  <span className="bg-green-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {homeItems.length}
+                  </span>
+                </div>
               </div>
               <div className="flex flex-col gap-2">
                 {homeItems.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-3">家にあるものはありません</p>
                 ) : (
                   homeItems.map((item) => (
-                    <ItemCard key={item.id} item={item} onClick={setSelectedItem} />
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      onToggle={handleStatusToggle}
+                      onDetail={setSelectedItem}
+                      onPriorityChange={handleStockChange}
+                      onDelete={handleDelete}
+                    />
                   ))
                 )}
               </div>
@@ -184,7 +292,13 @@ export default function HomePage() {
                 </div>
                 <div className="flex flex-col gap-2">
                   {noneItems.map((item) => (
-                    <ItemCard key={item.id} item={item} onClick={setSelectedItem} />
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      onToggle={handleStatusToggle}
+                      onDetail={setSelectedItem}
+                      onDelete={handleDelete}
+                    />
                   ))}
                 </div>
               </section>
@@ -193,29 +307,14 @@ export default function HomePage() {
         )}
       </main>
 
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white">
-        <div className="px-4 pt-3 pb-2">
-          <button
-            onClick={() => setShowAdd(true)}
-            className="w-full flex items-center justify-center gap-2 bg-green-500 text-white rounded-full py-3.5 text-base font-semibold shadow-md active:scale-95 transition"
-          >
-            <span className="text-xl leading-none">+</span>
-            アイテムを追加
-          </button>
-        </div>
-        <nav className="flex border-t border-gray-100">
-          <button className="flex-1 flex flex-col items-center gap-0.5 py-2 text-green-500">
-            <span className="text-xl">🏠</span>
-            <span className="text-xs font-medium">ホーム</span>
-          </button>
-          <button
-            onClick={() => router.push('/members')}
-            className="flex-1 flex flex-col items-center gap-0.5 py-2 text-gray-400"
-          >
-            <span className="text-xl">👥</span>
-            <span className="text-xs font-medium">メンバー</span>
-          </button>
-        </nav>
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg px-4 pb-8 pt-3 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none">
+        <button
+          onClick={() => setShowAdd(true)}
+          className="pointer-events-auto w-full flex items-center justify-center gap-2 bg-green-500 text-white rounded-full py-3.5 text-base font-semibold shadow-md active:scale-95 transition"
+        >
+          <span className="text-xl leading-none">+</span>
+          アイテムを追加
+        </button>
       </div>
 
       {showAdd && <AddItemModal onAdd={handleAdd} onClose={() => setShowAdd(false)} />}

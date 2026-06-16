@@ -15,8 +15,7 @@ export default function InvitePage() {
       router.replace('/onboarding/family')
       return
     }
-    const origin = window.location.origin
-    setInviteUrl(`${origin}/join/${token}`)
+    setInviteUrl(`${window.location.origin}/join/${token}`)
   }, [router])
 
   const handleCopy = async () => {
@@ -27,11 +26,17 @@ export default function InvitePage() {
 
   const handleShare = async () => {
     if (navigator.share) {
-      await navigator.share({
-        title: `${storage.getFamilyName()}に参加しよう`,
-        text: 'ある・ないアプリで家族の買い物リストを共有しよう！',
-        url: inviteUrl,
-      })
+      try {
+        await navigator.share({
+          title: `${storage.getFamilyName()}に参加しよう`,
+          text: 'ある・ないアプリで家族の買い物リストを共有しよう！',
+          url: inviteUrl,
+        })
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          handleCopy()
+        }
+      }
     } else {
       handleCopy()
     }

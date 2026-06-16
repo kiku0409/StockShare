@@ -5,11 +5,16 @@ const KEYS = {
   familyName: 'aru_nai_family_name',
 } as const
 
+const get = (key: string): string | null => {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(key)
+}
+
 export const storage = {
-  getMemberId: () => localStorage.getItem(KEYS.memberId),
-  getFamilyId: () => localStorage.getItem(KEYS.familyId),
-  getMemberName: () => localStorage.getItem(KEYS.memberName),
-  getFamilyName: () => localStorage.getItem(KEYS.familyName),
+  getMemberId: () => get(KEYS.memberId),
+  getFamilyId: () => get(KEYS.familyId),
+  getMemberName: () => get(KEYS.memberName),
+  getFamilyName: () => get(KEYS.familyName),
 
   setSession: (params: {
     memberId: string
@@ -17,6 +22,7 @@ export const storage = {
     memberName: string
     familyName: string
   }) => {
+    if (typeof window === 'undefined') return
     localStorage.setItem(KEYS.memberId, params.memberId)
     localStorage.setItem(KEYS.familyId, params.familyId)
     localStorage.setItem(KEYS.memberName, params.memberName)
@@ -24,13 +30,12 @@ export const storage = {
   },
 
   clear: () => {
+    if (typeof window === 'undefined') return
     Object.values(KEYS).forEach((k) => localStorage.removeItem(k))
   },
 
   isLoggedIn: () => {
-    return !!(
-      localStorage.getItem(KEYS.memberId) &&
-      localStorage.getItem(KEYS.familyId)
-    )
+    if (typeof window === 'undefined') return false
+    return !!(localStorage.getItem(KEYS.memberId) && localStorage.getItem(KEYS.familyId))
   },
 }

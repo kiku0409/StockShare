@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { storage } from '@/lib/storage'
@@ -11,6 +11,17 @@ export default function JoinPage() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    if (storage.isLoggedIn()) {
+      router.replace('/home')
+    } else {
+      setChecking(false)
+    }
+  }, [router])
+
+  if (checking) return null
 
   const handleJoin = async () => {
     if (!name.trim()) return

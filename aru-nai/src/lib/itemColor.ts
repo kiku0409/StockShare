@@ -11,5 +11,9 @@ const COLORS = [
 
 export function getItemColor(name: string): string {
   if (!name) return COLORS[0]
-  return COLORS[name.charCodeAt(0) % COLORS.length]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  }
+  return COLORS[hash % COLORS.length]
 }

@@ -23,5 +23,5 @@ export interface Item {
   priority: Priority
   updated_by_member_id: string | null
   updated_at: string
-  members?: Member
+  members?: { display_name: string } | null
 }
