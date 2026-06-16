@@ -64,14 +64,14 @@ export default function InvitePage() {
         </div>
 
         <button
-          onClick={handleShare}
+          onClick={async () => { await handleShare(); router.push('/onboarding/items') }}
           className="w-full rounded-xl bg-green-500 text-white py-4 text-lg font-semibold active:scale-95 transition"
         >
           リンクをシェア
         </button>
 
         <button
-          onClick={() => router.push('/home')}
+          onClick={() => router.push('/onboarding/items')}
           className="w-full text-gray-500 py-2 text-sm"
         >
           あとで招待する
