@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ある・ないアプリ
 
-## Getting Started
+家族間で「家にあるもの」「買う必要があるもの」の認識を共有するアプリ。
 
-First, run the development server:
+個数・賞味期限管理なし。**ワンタップで状態を切り替える**シンプルさが最優先。
+
+**本番URL**: https://aru-nai-iota.vercel.app
+
+---
+
+## 機能
+
+- **3ゾーン管理** — 買う / 家にある / 家にない
+- **ワンタップ切り替え** — カードタップで買う↔家にある を即切り替え
+- **優先度**（買うゾーン） — 左バーの色で識別。バータップで 🔴至急 / 🟡近日中 / ⚪️ついでに を切り替え
+- **在庫レベル**（家にあるゾーン） — バータップで 豊富（薄緑）/ 残り少ない（アンバー）を切り替え
+- **フィルター** — 優先度で複数選択フィルタリング
+- **スワイプ削除** — カードを左スワイプで削除
+- **リアルタイム同期** — Supabase Realtime で家族全員に即反映
+- **招待リンク** — URLを共有するだけで家族が参加できる
+- **メンバー管理** — 設定画面からメンバーの追加・削除
+
+---
+
+## 技術構成
+
+| 項目 | 内容 |
+|------|------|
+| フレームワーク | Next.js 16 + TypeScript |
+| スタイリング | Tailwind CSS |
+| DB / Realtime | Supabase |
+| デプロイ | Vercel |
+| 認証 | なし（localStorage + 招待リンク方式） |
+
+---
+
+## ローカル起動
+
+```bash
+git clone https://github.com/kiku0409/StockShare.git
+cd StockShare/aru-nai
+npm install
+```
+
+`.env.local` を作成：
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://yjyfuyogggbeuaxesryn.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+```
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## デプロイ
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+GitHub の `main` ブランチへの push で Vercel が自動デプロイ。
 
-## Learn More
+手動デプロイ（CLIから）：
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# リポジトリルート（StockShare/）から実行
+npx vercel --prod --scope kikus-projects-414e71be
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## DB スキーマ
 
-## Deploy on Vercel
+```
+families   id, name, invite_token, created_at
+members    id, family_id, display_name, created_at
+items      id, family_id, name, status, priority, updated_by_member_id, updated_at
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+status:   'home' | 'buy' | 'none'
+priority: 'urgent' | 'soon' | 'anytime'  ← 買うゾーンは優先度、家にあるゾーンは在庫レベルとして使用
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Supabase プロジェクト: `yjyfuyogggbeuaxesryn`
+
+---
+
+## ディレクトリ構成
+
+```
+src/
+├── app/
+│   ├── home/           # メイン画面
+│   ├── settings/       # 設定・招待URL・メンバー管理
+│   ├── members/        # メンバー一覧
+│   ├── join/[token]/   # 招待リンク参加
+│   └── onboarding/     # 初回セットアップ
+├── components/
+│   ├── ItemCard.tsx        # アイテムカード（スワイプ削除・優先度バー）
+│   ├── ItemDetailModal.tsx # 詳細・ステータス変更モーダル
+│   └── AddItemModal.tsx    # アイテム追加モーダル
+└── lib/
+    ├── supabase.ts   # Supabase クライアント
+    ├── storage.ts    # localStorage ラッパー
+    ├── time.ts       # 相対時間フォーマット
+    └── itemColor.ts  # アイテム名からイニシャル円の色を決定
+```
