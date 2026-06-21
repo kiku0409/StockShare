@@ -42,6 +42,19 @@ export default function FamilyNamePage() {
         >
           次へ
         </button>
+
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400">または</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
+        <button
+          onClick={() => router.push('/onboarding/join')}
+          className="w-full rounded-xl border border-gray-200 text-gray-600 py-4 text-lg font-semibold active:scale-95 transition"
+        >
+          招待リンクで参加
+        </button>
       </div>
     </div>
   )
