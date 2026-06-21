@@ -37,9 +37,14 @@ export default function ItemDetailModal({ item, onStatusChange, onDelete, onClos
           {item.name[0] ?? '？'}
         </div>
         <h2 className="text-xl font-bold text-center text-gray-900 mb-1">{item.name}</h2>
-        <p className="text-xs text-center text-gray-400 mb-6">
+        <p className="text-xs text-center text-gray-400 mb-3">
           {updaterName}が{formatRelativeTime(item.updated_at)}に更新
         </p>
+        {item.note && (
+          <p className="text-sm text-gray-500 text-center bg-gray-50 rounded-xl px-4 py-3 mb-3">
+            {item.note}
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <button
