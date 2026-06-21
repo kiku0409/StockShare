@@ -25,7 +25,23 @@ export default function SettingsPage() {
       router.replace('/onboarding/family')
       return
     }
-    if (!familyId) return
+    if (!familyId || !memberId) {
+      storage.clear()
+      router.replace('/onboarding/family')
+      return
+    }
+
+    supabase
+      .from('members')
+      .select('id')
+      .eq('id', memberId)
+      .single()
+      .then(({ data }) => {
+        if (!data) {
+          storage.clear()
+          router.replace('/onboarding/family')
+        }
+      })
 
     supabase
       .from('families')

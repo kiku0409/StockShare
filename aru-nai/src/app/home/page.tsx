@@ -44,8 +44,27 @@ export default function HomePage() {
       router.replace('/onboarding/family')
       return
     }
-    fetchItems()
-  }, [fetchItems, router])
+
+    if (!memberId) {
+      storage.clear()
+      router.replace('/onboarding/family')
+      return
+    }
+
+    supabase
+      .from('members')
+      .select('id')
+      .eq('id', memberId)
+      .single()
+      .then(({ data }) => {
+        if (!data) {
+          storage.clear()
+          router.replace('/onboarding/family')
+          return
+        }
+        fetchItems()
+      })
+  }, [fetchItems, memberId, router])
 
   // Realtime: 全件再取得ではなく差分更新（#3）
   useEffect(() => {
@@ -126,10 +145,10 @@ export default function HomePage() {
     setItems((prev) => prev.filter((i) => i.id !== item.id))
   }
 
-  const handleAdd = async (name: string, status: ItemStatus) => {
+  const handleAdd = async (name: string, status: ItemStatus, note: string) => {
     const { data, error } = await supabase
       .from('items')
-      .insert({ family_id: familyId, name, status, updated_by_member_id: memberId })
+      .insert({ family_id: familyId, name, status, note: note || null, updated_by_member_id: memberId })
       .select('*, members(display_name)')
       .single()
     if (error) { console.error('handleAdd failed:', error); return }
