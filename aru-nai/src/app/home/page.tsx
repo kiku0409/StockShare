@@ -44,8 +44,27 @@ export default function HomePage() {
       router.replace('/onboarding/family')
       return
     }
-    fetchItems()
-  }, [fetchItems, router])
+
+    if (!memberId) {
+      storage.clear()
+      router.replace('/onboarding/family')
+      return
+    }
+
+    supabase
+      .from('members')
+      .select('id')
+      .eq('id', memberId)
+      .single()
+      .then(({ data }) => {
+        if (!data) {
+          storage.clear()
+          router.replace('/onboarding/family')
+          return
+        }
+        fetchItems()
+      })
+  }, [fetchItems, memberId, router])
 
   // Realtime: 全件再取得ではなく差分更新（#3）
   useEffect(() => {
