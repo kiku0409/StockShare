@@ -28,7 +28,7 @@ interface Props {
 }
 
 export default function ItemCard({ item, onToggle, onDetail, onPriorityChange, onDelete }: Props) {
-  const updaterName = item.members?.display_name ?? '不明'
+  const updaterName = item.members?.display_name ?? item.updated_by_name ?? '不明'
   const timeAgo = formatRelativeTime(item.updated_at)
   const colorClass = getItemColor(item.name)
   const isNone = item.status === 'none'

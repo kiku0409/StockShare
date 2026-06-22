@@ -123,6 +123,7 @@ export default function HomePage() {
       status: newStatus,
       priority: 'anytime' as Priority,
       updated_by_member_id: memberId,
+      updated_by_name: memberName,
       updated_at: now,
     }
     const { error } = await supabase.from('items').update(updates).eq('id', item.id)
@@ -165,7 +166,7 @@ export default function HomePage() {
   const handleAdd = async (name: string, status: ItemStatus, note: string) => {
     const { data, error } = await supabase
       .from('items')
-      .insert({ family_id: familyId, name, status, note: note || null, updated_by_member_id: memberId })
+      .insert({ family_id: familyId, name, status, note: note || null, updated_by_member_id: memberId, updated_by_name: memberName })
       .select('*, members(display_name)')
       .single()
     if (error) { console.error('handleAdd failed:', error); return }
@@ -186,7 +187,7 @@ export default function HomePage() {
   const activeItems = items.filter((i) => i.status !== 'none')
   const lastUpdated = activeItems[0]
     ? (() => {
-        const name = activeItems[0].members?.display_name ?? ''
+        const name = activeItems[0].members?.display_name ?? activeItems[0].updated_by_name ?? ''
         return `${name}が${formatRelativeTime(activeItems[0].updated_at)}に更新`
       })()
     : null

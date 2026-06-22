@@ -35,7 +35,7 @@ export default function SettingsPage() {
       .from('members')
       .select('id')
       .eq('id', memberId)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (!data) {
           storage.clear()
