@@ -55,8 +55,9 @@ export default function HomePage() {
       .from('members')
       .select('id')
       .eq('id', memberId)
-      .single()
-      .then(({ data }) => {
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) { fetchItems(); return }  // network error - fail open
         if (!data) {
           storage.clear()
           router.replace('/onboarding/family')
@@ -65,6 +66,23 @@ export default function HomePage() {
         fetchItems()
       })
   }, [fetchItems, memberId, router])
+
+  // 自分が削除されたらリアルタイムでログアウト
+  useEffect(() => {
+    if (!memberId) return
+    const channel = supabase
+      .channel(`member:${memberId}`)
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'members', filter: `id=eq.${memberId}` },
+        () => {
+          storage.clear()
+          router.replace('/onboarding/family')
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [memberId, router])
 
   // Realtime: 全件再取得ではなく差分更新（#3）
   useEffect(() => {
@@ -85,13 +103,12 @@ export default function HomePage() {
               .single()
             if (data) setItems((prev) => [data as Item, ...prev.filter((i) => i.id !== data.id)])
           } else if (payload.eventType === 'UPDATE') {
-            setItems((prev) =>
-              prev.map((i) =>
-                i.id === (payload.new as { id: string }).id
-                  ? { ...i, ...(payload.new as Partial<Item>) }
-                  : i
-              )
-            )
+            const { data } = await supabase
+              .from('items')
+              .select('*, members(display_name)')
+              .eq('id', (payload.new as { id: string }).id)
+              .single()
+            if (data) setItems((prev) => prev.map((i) => i.id === data.id ? data as Item : i))
           }
         }
       )
