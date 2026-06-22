@@ -14,7 +14,7 @@ interface Props {
 
 export default function ItemDetailModal({ item, onStatusChange, onDelete, onClose }: Props) {
   const colorClass = getItemColor(item.name)
-  const updaterName = item.members?.display_name ?? '不明'
+  const updaterName = item.members?.display_name ?? item.updated_by_name ?? '不明'
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const handleStatus = (status: ItemStatus) => {

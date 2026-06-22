@@ -23,6 +23,7 @@ export interface Item {
   priority: Priority
   note?: string | null
   updated_by_member_id: string | null
+  updated_by_name?: string | null
   updated_at: string
   members?: { display_name: string } | null
 }
