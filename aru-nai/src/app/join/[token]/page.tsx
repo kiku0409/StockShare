@@ -14,11 +14,32 @@ export default function JoinPage() {
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    if (storage.isLoggedIn()) {
-      router.replace('/home')
-    } else {
+    if (!storage.isLoggedIn()) {
       setChecking(false)
+      return
     }
+
+    const memberId = storage.getMemberId()
+    if (!memberId) {
+      storage.clear()
+      setChecking(false)
+      return
+    }
+
+    // メンバーがDBに存在する場合のみホームへ、削除済みなら再参加させる
+    supabase
+      .from('members')
+      .select('id')
+      .eq('id', memberId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          router.replace('/home')
+        } else {
+          storage.clear()
+          setChecking(false)
+        }
+      })
   }, [router])
 
   if (checking) return null
