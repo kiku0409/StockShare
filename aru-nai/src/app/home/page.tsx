@@ -11,6 +11,7 @@ import type { Item, ItemStatus, Priority } from '@/types'
 import ItemCard from '@/components/ItemCard'
 import AddItemModal from '@/components/AddItemModal'
 import ItemDetailModal from '@/components/ItemDetailModal'
+import { usePushNotification } from '@/hooks/usePushNotification'
 
 const PRIORITY_CYCLE: Priority[] = ['anytime', 'urgent', 'soon']
 const PRIORITY_ORDER: Record<Priority, number> = { urgent: 0, soon: 1, anytime: 2 }
@@ -21,13 +22,16 @@ export default function HomePage() {
   const [showAdd, setShowAdd] = useState(false)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [loading, setLoading] = useState(true)
-  const [priorityFilter, setPriorityFilter] = useState<Set<'urgent' | 'soon' | 'anytime'>>(new Set())
+  const [priorityFilter, setPriorityFilter] = useState<Set<Priority>>(new Set())
+  const [stockFilter, setStockFilter] = useState<Set<Priority>>(new Set())
 
   // localStorage は初回レンダリング時のみ読む
   const familyId = useRef(storage.getFamilyId()).current
   const memberId = useRef(storage.getMemberId()).current
   const familyName = useRef(storage.getFamilyName()).current ?? ''
   const memberName = useRef(storage.getMemberName()).current ?? ''
+
+  usePushNotification(familyId, memberId)
 
   const fetchItems = useCallback(async () => {
     if (!familyId) return
@@ -137,6 +141,18 @@ export default function HomePage() {
           : i
       )
     )
+    if (item.status === 'buy' && newStatus === 'home') {
+      fetch('/api/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          family_id: familyId,
+          title: 'ある・ない',
+          body: `✅ ${item.name}が家にあるに移動されました`,
+          exclude_member_id: memberId,
+        }),
+      }).catch(() => {})
+    }
   }
 
   const handlePriorityChange = async (item: Item) => {
@@ -147,8 +163,16 @@ export default function HomePage() {
     setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, priority: next } : i))
   }
 
+  const handleStockSet = async (item: Item, priority: Priority) => {
+    const { error } = await supabase.from('items').update({ priority }).eq('id', item.id)
+    if (error) { console.error('handleStockSet failed:', error); return }
+    setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, priority } : i))
+  }
+
+  const STOCK_CYCLE: Priority[] = ['anytime', 'soon', 'urgent']
   const handleStockChange = async (item: Item) => {
-    const next: Priority = (item.priority ?? 'anytime') === 'anytime' ? 'urgent' : 'anytime'
+    const current = item.priority ?? 'anytime'
+    const next = STOCK_CYCLE[(STOCK_CYCLE.indexOf(current) + 1) % STOCK_CYCLE.length]
     const { error } = await supabase.from('items').update({ priority: next }).eq('id', item.id)
     if (error) { console.error('handleStockChange failed:', error); return }
     setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, priority: next } : i))
@@ -165,26 +189,43 @@ export default function HomePage() {
     setItems((prev) => prev.filter((i) => i.id !== item.id))
   }
 
-  const handleAdd = async (name: string, status: ItemStatus, note: string) => {
+  const handleAdd = async (name: string, status: ItemStatus, note: string, priority: Priority = 'anytime') => {
     const { data, error } = await supabase
       .from('items')
-      .insert({ family_id: familyId, name, status, note: note || null, updated_by_member_id: memberId, updated_by_name: memberName })
+      .insert({ family_id: familyId, name, status, priority, note: note || null, updated_by_member_id: memberId, updated_by_name: memberName })
       .select('*, members(display_name)')
       .single()
     if (error) { console.error('handleAdd failed:', error); return }
     if (data) setItems((prev) => [data as Item, ...prev])
+    if (status === 'buy') {
+      fetch('/api/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          family_id: familyId,
+          title: 'ある・ない',
+          body: `🛒 ${name}が買い物リストに追加されました`,
+          exclude_member_id: memberId,
+        }),
+      }).catch(() => {})
+    }
   }
 
   const buyItems = items
     .filter((i) => i.status === 'buy')
     .sort((a, b) => PRIORITY_ORDER[a.priority ?? 'anytime'] - PRIORITY_ORDER[b.priority ?? 'anytime'])
-  const homeItems = items.filter((i) => i.status === 'home')
+  const homeItems = items
+    .filter((i) => i.status === 'home')
+    .sort((a, b) => PRIORITY_ORDER[a.priority ?? 'anytime'] - PRIORITY_ORDER[b.priority ?? 'anytime'])
   const noneItems = items.filter((i) => i.status === 'none')
 
-  // #7: 3つ全選択での自動リセットを廃止。明示的に「全て」ボタンでのみリセット
   const displayedBuyItems = priorityFilter.size === 0
     ? buyItems
     : buyItems.filter((i) => priorityFilter.has(i.priority ?? 'anytime'))
+
+  const displayedHomeItems = stockFilter.size === 0
+    ? homeItems
+    : homeItems.filter((i) => stockFilter.has(i.priority ?? 'anytime'))
 
   const activeItems = items.filter((i) => i.status !== 'none')
   const lastUpdated = activeItems[0]
@@ -294,17 +335,55 @@ export default function HomePage() {
                   <div className="flex items-center gap-1 text-xs text-gray-400">
                     <span className="w-2 h-2 rounded-full bg-green-200 inline-block" />豊富
                     <span className="w-2 h-2 rounded-full bg-amber-400 inline-block ml-1.5" />残り少ない
+                    <span className="w-2 h-2 rounded-full bg-red-400 inline-block ml-1.5" />在庫ゼロ
                   </div>
                   <span className="bg-green-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                     {homeItems.length}
                   </span>
                 </div>
               </div>
+              {homeItems.length > 0 && (
+                <div className="flex gap-1.5 mb-2 overflow-x-auto pb-0.5">
+                  <button
+                    onClick={() => setStockFilter(new Set())}
+                    className={`shrink-0 text-xs px-3 py-1.5 rounded-full font-semibold transition active:scale-95 ${
+                      stockFilter.size === 0
+                        ? 'bg-green-500 text-white'
+                        : 'bg-white text-gray-400 border border-gray-200'
+                    }`}
+                  >
+                    全て
+                  </button>
+                  {([
+                    { value: 'anytime', label: '🟢 豊富' },
+                    { value: 'soon',    label: '🟡 残り少ない' },
+                    { value: 'urgent',  label: '🔴 在庫ゼロ' },
+                  ] as const).map(({ value, label }) => (
+                    <button
+                      key={value}
+                      onClick={() => setStockFilter((prev) => {
+                        const next = new Set(prev)
+                        next.has(value) ? next.delete(value) : next.add(value)
+                        return next
+                      })}
+                      className={`shrink-0 text-xs px-3 py-1.5 rounded-full font-semibold transition active:scale-95 ${
+                        stockFilter.has(value)
+                          ? 'bg-green-500 text-white'
+                          : 'bg-white text-gray-400 border border-gray-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex flex-col gap-2">
-                {homeItems.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-3">家にあるものはありません</p>
+                {displayedHomeItems.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-3">
+                    {stockFilter.size > 0 ? 'このカテゴリのアイテムはありません' : '家にあるものはありません'}
+                  </p>
                 ) : (
-                  homeItems.map((item) => (
+                  displayedHomeItems.map((item) => (
                     <ItemCard
                       key={item.id}
                       item={item}
@@ -361,6 +440,7 @@ export default function HomePage() {
         <ItemDetailModal
           item={selectedItem}
           onStatusChange={handleStatusChange}
+          onStockChange={handleStockSet}
           onDelete={handleDelete}
           onClose={() => setSelectedItem(null)}
         />

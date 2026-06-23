@@ -202,6 +202,16 @@ export default function SettingsPage() {
             <p className="text-sm text-gray-400">読み込み中...</p>
           )}
         </section>
+
+        {/* ログアウト */}
+        <section className="bg-white rounded-2xl px-5 py-4 shadow-sm">
+          <button
+            onClick={() => { storage.clear(); router.replace('/onboarding/family') }}
+            className="w-full rounded-xl border border-red-200 py-3 text-sm font-semibold text-red-500 active:scale-95 transition"
+          >
+            このファミリーからログアウト
+          </button>
+        </section>
       </main>
     </div>
   )

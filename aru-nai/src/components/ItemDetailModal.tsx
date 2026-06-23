@@ -1,18 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import type { Item, ItemStatus } from '@/types'
+import type { Item, ItemStatus, Priority } from '@/types'
 import { getItemColor } from '@/lib/itemColor'
 import { formatRelativeTime } from '@/lib/time'
 
 interface Props {
   item: Item
   onStatusChange: (item: Item, status: ItemStatus) => void
+  onStockChange?: (item: Item, priority: Priority) => void
   onDelete: (item: Item) => void
   onClose: () => void
 }
 
-export default function ItemDetailModal({ item, onStatusChange, onDelete, onClose }: Props) {
+export default function ItemDetailModal({ item, onStatusChange, onStockChange, onDelete, onClose }: Props) {
   const colorClass = getItemColor(item.name)
   const updaterName = item.members?.display_name ?? item.updated_by_name ?? '不明'
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -70,6 +71,29 @@ export default function ItemDetailModal({ item, onStatusChange, onDelete, onClos
             <span className="text-sm">買う</span>
           </button>
         </div>
+
+        {item.status === 'home' && onStockChange && (
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {([
+              { value: 'anytime' as Priority, label: '🟢', text: '豊富' },
+              { value: 'soon'    as Priority, label: '🟡', text: '残り少ない' },
+              { value: 'urgent'  as Priority, label: '🔴', text: '在庫ゼロ' },
+            ]).map(({ value, label, text }) => (
+              <button
+                key={value}
+                onClick={() => { onStockChange(item, value); onClose() }}
+                className={`flex flex-col items-center gap-1 rounded-2xl border-2 py-3 font-semibold transition active:scale-95 ${
+                  (item.priority ?? 'anytime') === value
+                    ? 'border-green-500 bg-green-50 text-green-700'
+                    : 'border-gray-100 bg-gray-50 text-gray-500'
+                }`}
+              >
+                <span className="text-xl">{label}</span>
+                <span className="text-xs">{text}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <button
           onClick={() => handleStatus('none')}

@@ -12,7 +12,7 @@ const PRIORITY_BAR: Record<string, string> = {
 }
 
 const STOCK_BAR: Record<string, string> = {
-  urgent:  'bg-amber-400',
+  urgent:  'bg-red-400',
   soon:    'bg-amber-400',
   anytime: 'bg-green-200',
 }
@@ -115,9 +115,14 @@ export default function ItemCard({ item, onToggle, onDetail, onPriorityChange, o
             {item.name[0] ?? '？'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className={`text-sm font-semibold truncate ${isNone ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-              {item.name}
-            </p>
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <p className={`text-sm font-semibold shrink-0 max-w-[55%] truncate ${isNone ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                {item.name}
+              </p>
+              {item.note && (
+                <span className="text-xs text-gray-400 truncate flex-1 min-w-0">{item.note}</span>
+              )}
+            </div>
             <p className="text-xs text-gray-400 mt-0.5">
               {isNone ? '家にない' : `${updaterName}・${timeAgo}`}
             </p>
