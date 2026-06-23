@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import type { Item } from '@/types'
+import type { Item, Priority } from '@/types'
 import { getItemColor } from '@/lib/itemColor'
 import { formatRelativeTime } from '@/lib/time'
 
@@ -17,7 +17,16 @@ const STOCK_BAR: Record<string, string> = {
   anytime: 'bg-green-200',
 }
 
-const SWIPE_DELETE_THRESHOLD = 72
+const NEXT_BUY_BG:     Record<Priority, string> = { urgent: 'bg-red-400', soon: 'bg-amber-400', anytime: 'bg-gray-300' }
+const NEXT_HOME_BG:    Record<Priority, string> = { urgent: 'bg-red-400', soon: 'bg-amber-400', anytime: 'bg-green-200' }
+const NEXT_BUY_LABEL:  Record<Priority, string> = { urgent: '⚡ 至急', soon: '⏰ 近日中', anytime: '✓ ついでに' }
+const NEXT_HOME_LABEL: Record<Priority, string> = { urgent: '📭 在庫ゼロ', soon: '⚠️ 残り少ない', anytime: '✓ 豊富' }
+
+const BUY_CYCLE:  Priority[] = ['anytime', 'soon', 'urgent']
+const HOME_CYCLE: Priority[] = ['anytime', 'soon', 'urgent']
+
+const SWIPE_DELETE_THRESHOLD   = 72
+const SWIPE_PRIORITY_THRESHOLD = 72
 
 interface Props {
   item: Item
@@ -35,6 +44,14 @@ export default function ItemCard({ item, onToggle, onDetail, onPriorityChange, o
   const priorityBar = item.status === 'home'
     ? STOCK_BAR[item.priority ?? 'anytime']
     : PRIORITY_BAR[item.priority ?? 'anytime']
+
+  // 右スワイプで表示する「次の優先度」情報
+  const cycle = item.status === 'home' ? HOME_CYCLE : BUY_CYCLE
+  const nextPriority = onPriorityChange
+    ? cycle[(cycle.indexOf(item.priority ?? 'anytime') + 1) % cycle.length]
+    : null
+  const nextBg    = nextPriority ? (item.status === 'home' ? NEXT_HOME_BG : NEXT_BUY_BG)[nextPriority] : ''
+  const nextLabel = nextPriority ? (item.status === 'home' ? NEXT_HOME_LABEL : NEXT_BUY_LABEL)[nextPriority] : ''
 
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
@@ -59,16 +76,23 @@ export default function ItemCard({ item, onToggle, onDetail, onPriorityChange, o
     const dx = e.touches[0].clientX - touchStartX.current
     const dy = e.touches[0].clientY - touchStartY.current
     if (!isDragging.current && Math.abs(dy) > Math.abs(dx)) return
-    if (dx < 0) {
-      isDragging.current = true
-      e.preventDefault()
+    isDragging.current = true
+    e.preventDefault()
+    if (dx > 0 && onPriorityChange) {
+      setSwipeX(Math.min(dx, SWIPE_PRIORITY_THRESHOLD + 20))
+    } else if (dx < 0 && onDelete) {
       setSwipeX(Math.max(dx, -SWIPE_DELETE_THRESHOLD - 20))
+    } else {
+      setSwipeX(0)
     }
   }
 
   const handleTouchEnd = () => {
     if (!isDragging.current) return
-    if (swipeX <= -SWIPE_DELETE_THRESHOLD && onDelete) {
+    if (swipeX >= SWIPE_PRIORITY_THRESHOLD && onPriorityChange) {
+      onPriorityChange(item)
+      setSwipeX(0)
+    } else if (swipeX <= -SWIPE_DELETE_THRESHOLD && onDelete) {
       setIsDeleting(true)
       deleteTimerRef.current = setTimeout(() => onDelete(item), 250)
     } else {
@@ -81,10 +105,18 @@ export default function ItemCard({ item, onToggle, onDetail, onPriorityChange, o
 
   return (
     <div className="relative overflow-hidden rounded-2xl">
-      {/* 削除背景 */}
-      <div className="absolute inset-0 flex items-center justify-end bg-red-500 rounded-2xl pr-5">
-        <span className="text-white text-xl">🗑</span>
-      </div>
+      {/* 右スワイプ中：優先度変更背景（左側に表示）*/}
+      {swipeX > 0 && nextPriority && (
+        <div className={`absolute inset-0 flex items-center justify-start rounded-2xl pl-5 ${nextBg}`}>
+          <span className="text-white text-sm font-bold">{nextLabel}</span>
+        </div>
+      )}
+      {/* 左スワイプ中：削除背景（右側に表示）*/}
+      {swipeX < 0 && (
+        <div className="absolute inset-0 flex items-center justify-end bg-red-500 rounded-2xl pr-5">
+          <span className="text-white text-xl">🗑</span>
+        </div>
+      )}
 
       {/* カード本体 */}
       <div
@@ -97,13 +129,9 @@ export default function ItemCard({ item, onToggle, onDetail, onPriorityChange, o
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* 優先度 / 在庫バー */}
-        {(item.status === 'buy' || item.status === 'home') && onPriorityChange && (
-          <button
-            onClick={() => onPriorityChange(item)}
-            className={`w-5 shrink-0 rounded-l-2xl ${priorityBar}`}
-            aria-label={item.status === 'home' ? '在庫レベルを変更' : '優先度を変更'}
-          />
+        {/* 優先度 / 在庫バー（視覚インジケーターのみ）*/}
+        {(item.status === 'buy' || item.status === 'home') && (
+          <div className={`w-5 shrink-0 rounded-l-2xl ${priorityBar}`} />
         )}
 
         {/* メインコンテンツ */}

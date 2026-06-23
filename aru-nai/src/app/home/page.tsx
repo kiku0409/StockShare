@@ -13,7 +13,7 @@ import AddItemModal from '@/components/AddItemModal'
 import ItemDetailModal from '@/components/ItemDetailModal'
 import { usePushNotification } from '@/hooks/usePushNotification'
 
-const PRIORITY_CYCLE: Priority[] = ['anytime', 'urgent', 'soon']
+const PRIORITY_CYCLE: Priority[] = ['anytime', 'soon', 'urgent']
 const PRIORITY_ORDER: Record<Priority, number> = { urgent: 0, soon: 1, anytime: 2 }
 
 export default function HomePage() {
@@ -161,6 +161,18 @@ export default function HomePage() {
     const { error } = await supabase.from('items').update({ priority: next }).eq('id', item.id)
     if (error) { console.error('handlePriorityChange failed:', error); return }
     setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, priority: next } : i))
+    if (item.status === 'buy' && next === 'urgent') {
+      fetch('/api/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          family_id: familyId,
+          title: 'ある・ない',
+          body: `⚡ ${item.name}が至急になりました`,
+          exclude_member_id: memberId,
+        }),
+      }).catch(() => {})
+    }
   }
 
   const handleStockSet = async (item: Item, priority: Priority) => {
